@@ -11,12 +11,14 @@
 #![no_std]
 extern crate alloc;
 
+mod address;
 mod child;
 mod master;
 mod pubkey;
 mod seed;
 mod util;
 
+pub use address::ethereum_address;
 pub use child::{HARDENED_OFFSET, hardened_child_key, normal_child_key};
 pub use master::{MASTER_KEY_HMAC_KEY, master_key};
 pub use pubkey::public_key;
