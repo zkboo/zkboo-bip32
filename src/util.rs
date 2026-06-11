@@ -15,3 +15,12 @@ pub fn be_bytes_to_word<B: Backend>(bytes: &[WordRef<B, u8>]) -> WordRef<B, u64,
     });
     return WordRef::from_le_words(words);
 }
+
+/// Splits a 256-bit word (4×u64) into 32 big-endian bytes (most significant byte first).
+pub fn word_to_be_bytes<B: Backend>(word: WordRef<B, u64, 4>) -> Vec<WordRef<B, u8>> {
+    let mut bytes = Vec::with_capacity(32);
+    for i in (0..4).rev() {
+        bytes.extend(word.clone().word_at(i).into_be_bytes());
+    }
+    return bytes;
+}
