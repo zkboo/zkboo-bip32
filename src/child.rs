@@ -4,13 +4,16 @@
 
 use alloc::vec::Vec;
 use zkboo::{
-    backend::{Allocator, Backend, WordRef},
+    backend::{Allocator, Backend, Frontend, WordRef},
     word::CompositeWord,
 };
 use zkboo_hmac::hmac;
 use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};
 
-use crate::util::be_bytes_to_word;
+use crate::{
+    pubkey::public_key,
+    util::{be_bytes_to_word, word_to_be_bytes},
+};
 
 /// The smallest hardened child index, `2^31`.
 pub const HARDENED_OFFSET: u32 = 0x8000_0000;
@@ -89,5 +92,63 @@ pub fn hardened_child_key<B: Backend>(
     let parent_word = be_bytes_to_word(&parent_private_key);
     let child_private_key = add_mod_n(il_word, parent_word);
 
+    return (child_private_key, ir);
+}
+
+/// Derives a BIP-32 **normal** (non-hardened) child private key and chain code.
+///
+/// Computes `I = HMAC-SHA512(parent_chain_code, ser_point(parent_pubkey) ‖ ser32(index))`, where
+/// `ser_point` is the 33-byte SEC1 *compressed* encoding of the parent public key
+/// `parent_private_key · G`; then `IL = I[0..32]`, the child chain code `IR = I[32..64]`, and the
+/// child private key `(parse256(IL) + parent_private_key) mod n`.
+///
+/// `index` must be non-hardened (`< 2^31`). Because it derives the parent public key, this circuit
+/// includes a full secp256k1 scalar multiplication (the dominant cost — see
+/// [public_key](crate::public_key)). The child private key is returned as a 256-bit word (4×u64);
+/// the chain code as 32 big-endian bytes. Validity (`IL < n`, non-zero child) is not enforced.
+pub fn normal_child_key<B: Backend>(
+    frontend: &Frontend<B>,
+    parent_chain_code: Vec<WordRef<B, u8>>,
+    parent_private_key: Vec<WordRef<B, u8>>,
+    index: u32,
+) -> (WordRef<B, u64, 4>, [WordRef<B, u8>; 32]) {
+    assert!(
+        index < HARDENED_OFFSET,
+        "normal derivation requires index < 2^31"
+    );
+    assert_eq!(parent_chain_code.len(), 32, "chain code must be 32 bytes");
+    assert_eq!(
+        parent_private_key.len(),
+        32,
+        "parent private key must be 32 bytes"
+    );
+
+    // Parent public key Q = d·G, in SEC1 compressed form: (0x02 | y_parity) || x_be.
+    let scalar = be_bytes_to_word(&parent_private_key);
+    let (x, y, _, _) = public_key(frontend, scalar).to_affine().destructure();
+    let prefix = y.value().lsb().select_const_const(0x03u8, 0x02u8);
+    let x_bytes = word_to_be_bytes(x.value());
+
+    // data = compressed_pubkey (33) || ser32(index) (4).
+    let allocator = frontend.allocator();
+    let mut data: Vec<WordRef<B, u8>> = Vec::with_capacity(37);
+    data.push(prefix);
+    data.extend(x_bytes);
+    for byte in index.to_be_bytes() {
+        data.push(allocator.alloc(byte));
+    }
+
+    let i = hmac(
+        allocator,
+        parent_chain_code,
+        data,
+        sha512bytes,
+        SHA512_BLOCKSIZE,
+    );
+    let mut words = i.into_iter();
+    let il: [WordRef<B, u8>; 32] = core::array::from_fn(|_| words.next().unwrap());
+    let ir: [WordRef<B, u8>; 32] = core::array::from_fn(|_| words.next().unwrap());
+
+    let child_private_key = add_mod_n(be_bytes_to_word(&il), be_bytes_to_word(&parent_private_key));
     return (child_private_key, ir);
 }
