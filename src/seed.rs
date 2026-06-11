@@ -69,3 +69,33 @@ pub fn bip39_seed<B: Backend>(
 
     return acc;
 }
+
+/// Partial BIP-39 lifting: derives the seed from a late intermediate state, doing only
+/// `remaining_rounds` HMAC applications instead of the full 2048.
+pub fn bip39_seed_partial<B: Backend>(
+    allocator: Allocator<B>,
+    mnemonic: Vec<WordRef<B, u8>>,
+    prev_u: Vec<WordRef<B, u8>>,
+    xor_prefix: Vec<WordRef<B, u8>>,
+    remaining_rounds: usize,
+) -> [WordRef<B, u8>; 64] {
+    assert_eq!(prev_u.len(), 64, "prev_u must be 64 bytes");
+    assert_eq!(xor_prefix.len(), 64, "xor_prefix must be 64 bytes");
+    assert!(remaining_rounds >= 1, "at least one remaining round");
+
+    let mut acc: [WordRef<B, u8>; 64] = core::array::from_fn(|i| xor_prefix[i].clone());
+    let mut u_prev = prev_u;
+    for _ in 0..remaining_rounds {
+        let u_next = hmac(
+            allocator.clone(),
+            mnemonic.clone(),
+            u_prev,
+            sha512bytes,
+            SHA512_BLOCKSIZE,
+        );
+        acc = core::array::from_fn(|i| acc[i].clone() ^ u_next[i].clone());
+        u_prev = u_next.into_iter().collect();
+    }
+
+    return acc;
+}
