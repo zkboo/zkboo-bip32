@@ -10,6 +10,8 @@ use zkboo::{
 use zkboo_hmac::hmac;
 use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};
 
+use crate::util::be_bytes_to_word;
+
 /// The smallest hardened child index, `2^31`.
 pub const HARDENED_OFFSET: u32 = 0x8000_0000;
 
@@ -32,17 +34,6 @@ fn add_mod_n<B: Backend>(a: WordRef<B, u64, 4>, b: WordRef<B, u64, 4>) -> WordRe
     let n = order_n();
     let (sum, carry) = a.overflowing_add(b);
     return (carry | sum.clone().ge_const(n)).select(sum.clone() - n, sum);
-}
-
-/// Assembles 32 big-endian bytes (`bytes[0]` most significant) into a 256-bit word as 4×u64.
-fn be_bytes_to_word<B: Backend>(bytes: &[WordRef<B, u8>]) -> WordRef<B, u64, 4> {
-    let words: [WordRef<B, u64, 1>; 4] = core::array::from_fn(|i| {
-        // Little-endian word `i` is the byte group at offset `(3 - i) * 8`.
-        let start = (3 - i) * 8;
-        let chunk = bytes[start..start + 8].iter().cloned().collect::<Vec<_>>();
-        WordRef::<B, u64, 1>::from_be_bytes(chunk).expect("8 bytes per u64 limb")
-    });
-    return WordRef::from_le_words(words);
 }
 
 /// Derives a BIP-32 **hardened** child private key and chain code.
