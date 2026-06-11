@@ -28,13 +28,23 @@ fn order_n() -> CompositeWord<u64, 4> {
     ]);
 }
 
-/// Modular addition `(a + b) mod n` for `a, b < n < 2^256`.
+/// Reduces a 256-bit value modulo `n`. Since any 4×u64 word is `< 2^256 < 2n`, a single
+/// conditional subtraction of `n` suffices.
+fn reduce_mod_n<B: Backend>(x: WordRef<B, u64, 4>) -> WordRef<B, u64, 4> {
+    let n = order_n();
+    return x.clone().ge_const(n).select(x.clone() - n, x);
+}
+
+/// Modular addition `(a + b) mod n` for arbitrary 256-bit `a, b`.
 ///
-/// Since both operands are below `n`, their sum is below `2n`, so a single conditional
-/// subtraction of `n` reduces the result. (Same shape as `zkboo_modular`'s Montgomery add, which
-/// is form-agnostic for addition.)
+/// Both operands are first reduced mod `n` (a no-op for canonical keys `< n`, but defensive
+/// against e.g. an `IL >= n` from HMAC), so their sum is `< 2n` and a single conditional
+/// subtraction reduces the result. (Same shape as `zkboo_modular`'s Montgomery add, which is
+/// form-agnostic for addition.)
 fn add_mod_n<B: Backend>(a: WordRef<B, u64, 4>, b: WordRef<B, u64, 4>) -> WordRef<B, u64, 4> {
     let n = order_n();
+    let a = reduce_mod_n(a);
+    let b = reduce_mod_n(b);
     let (sum, carry) = a.overflowing_add(b);
     return (carry | sum.clone().ge_const(n)).select(sum.clone() - n, sum);
 }

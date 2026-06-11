@@ -22,5 +22,5 @@ pub use address::ethereum_address;
 pub use child::{HARDENED_OFFSET, hardened_child_key, normal_child_key};
 pub use master::{MASTER_KEY_HMAC_KEY, master_key};
 pub use pubkey::public_key;
-pub use seed::{PBKDF2_ROUNDS, SALT_PREFIX, bip39_seed};
+pub use seed::{PBKDF2_ROUNDS, SALT_PREFIX, bip39_seed, bip39_seed_partial};
 pub use util::{be_bytes_to_word, word_to_be_bytes};
