@@ -1,0 +1,15 @@
+[package]
+name = "zkboo-bip32"
+version = "0.1.0"
+edition = "2024"
+license = "LGPL-3.0-or-later"
+description = "BIP-32 hierarchical-deterministic key derivation as ZKBoo circuits, for proof of seed."
+repository = "https://github.com/hashberg-io/zkboo-bip32"
+
+[dependencies]
+zkboo = { version = "0.1.0", features = ["u32", "u64"] }
+zkboo-sha2 = { version = "0.1.0", features = ["sha512"] }
+zkboo-hmac = { version = "0.1.0" }
+
+[dev-dependencies]
+zkboo = { version = "0.1.0", features = ["u32", "u64"] }
