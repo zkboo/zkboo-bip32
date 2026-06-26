@@ -3,9 +3,11 @@
 //! Ethereum address derivation from a private key.
 
 use zkboo::backend::{Backend, Frontend, WordRef};
+use zkboo_ecc::montgomery::{ComputedWindowTables, Curve, WindowTables, DEFAULT_COMB_WINDOW_BITS};
+use zkboo_ecc::secp256k1::Secp256k1PM;
 use zkboo_keccak::keccak256;
 
-use crate::{pubkey::public_key, util::word_to_be_bytes};
+use crate::{pubkey::public_key_with_tables, util::word_to_be_bytes};
 
 /// Derives the 20-byte Ethereum address for a private key scalar `d`.
 ///
@@ -15,12 +17,25 @@ use crate::{pubkey::public_key, util::word_to_be_bytes};
 ///
 /// Build the scalar from 32 big-endian witness bytes with
 /// [be_bytes_to_word](crate::be_bytes_to_word). As with [public_key], the dominant cost is the
-/// secp256k1 scalar multiplication.
+/// secp256k1 scalar multiplication. This convenience form computes the comb tables on demand; use
+/// [`ethereum_address_with_tables`] to control the table source (e.g. watchdog servicing).
 pub fn ethereum_address<B: Backend>(
     frontend: &Frontend<B>,
     private_key: WordRef<B, u64, 4>,
 ) -> [WordRef<B, u8>; 20] {
-    let (x, y, _, _) = public_key(frontend, private_key).to_affine().destructure();
+    let mut tables = ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
+    return ethereum_address_with_tables(frontend, private_key, &mut tables);
+}
+
+/// [`ethereum_address`] with a caller-supplied comb-table source (built for `Secp256k1PM.g()`).
+pub fn ethereum_address_with_tables<B: Backend>(
+    frontend: &Frontend<B>,
+    private_key: WordRef<B, u64, 4>,
+    tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
+) -> [WordRef<B, u8>; 20] {
+    let (x, y, _, _) = public_key_with_tables(frontend, private_key, tables)
+        .to_affine()
+        .destructure();
 
     // Uncompressed public key, no 0x04 prefix: x_be (32) || y_be (32).
     let mut pubkey_bytes = word_to_be_bytes(x.value());
