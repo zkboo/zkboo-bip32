@@ -77,13 +77,13 @@ responses.
 | master key | 57.7 KiB | 12.8 KiB | — | 5.8 ms | 2.0 ms |
 | hardened child | 58.1 KiB | 13.3 KiB | — | 5.1 ms | 2.1 ms |
 | BIP-39 seed (4 rounds) | 230 KiB | 14.2 KiB | — | 20.1 ms | 7.6 ms |
-| secp256k1 pubkey `d·G` | 1.1 GiB | 6.0 KiB | 15.9 s | — | — |
-| normal child | 1.1 GiB | 13.7 KiB | 16.1 s | — | — |
-| Ethereum address | 1.1 GiB | 9.3 KiB | 15.8 s | — | — |
+| secp256k1 pubkey `d·G` | 42.3 MB | 6.0 KiB | — | — | — |
+| normal child | 42.3 MB | 13.7 KiB | — | — | — |
+| Ethereum address | 42.3 MB | 9.3 KiB | — | — | — |
 
 The headline: **every prover fits a secure element's RAM budget** (single-digit KiB), including the
-full Ethereum-address binding. The elephant is proof *size*, not prover memory — and a 1.06 GiB
-response has been streamed and verified end-to-end at ~2 MB RSS. See `zkboo-harness` to reproduce.
+full Ethereum-address binding. The elephant is proof *size*, not prover memory — and a ~42 MB
+response has been streamed and verified end-to-end at constant (~MB) memory. See `zkboo-harness` to reproduce.
 
 ## 🚧 Warning 🚧
 
