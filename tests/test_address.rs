@@ -43,16 +43,10 @@ fn address_of(value: u8) -> String {
 #[test]
 fn test_address_private_key_one() {
     // The well-known address for private key 0x01.
-    assert_eq!(
-        address_of(1),
-        "7e5f4552091a69125d5dfcb7b8c2659029395bdf"
-    );
+    assert_eq!(address_of(1), "7e5f4552091a69125d5dfcb7b8c2659029395bdf");
 }
 
 #[test]
 fn test_address_private_key_two() {
-    assert_eq!(
-        address_of(2),
-        "2b5ad5c4795c026514f8317c7a215e218dccd6cf"
-    );
+    assert_eq!(address_of(2), "2b5ad5c4795c026514f8317c7a215e218dccd6cf");
 }
