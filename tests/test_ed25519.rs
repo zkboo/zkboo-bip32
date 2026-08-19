@@ -218,3 +218,50 @@ fn test_solana_pubkey_independent_expected_value() {
         "ce5e3294aa964334c284d29d498bb3eb5595214ed3b0c96afee36547a938349c"
     );
 }
+
+/// Derives a Solana public key fully in-circuit from a mnemonic: BIP-39 seed (all 2048 PBKDF2
+/// rounds), then a SLIP-0010 Ed25519 chain, then the Ed25519 public key.
+struct MnemonicToPubkeyCircuit {
+    mnemonic: &'static str,
+    path: Vec<u32>,
+}
+
+impl Circuit for MnemonicToPubkeyCircuit {
+    fn exec<B: Backend>(&self, frontend: &Frontend<B>) {
+        let allocator = frontend.allocator();
+        let mnemonic = self
+            .mnemonic
+            .bytes()
+            .map(|b| frontend.input(b))
+            .collect::<Vec<_>>();
+        let seed = zkboo_bip32::bip39_seed(
+            allocator.clone(),
+            mnemonic,
+            zkboo_bip32::SALT_PREFIX,
+            zkboo_bip32::PBKDF2_ROUNDS,
+        );
+        let (mut key, mut chain) = slip10_ed25519_master(allocator.clone(), seed.to_vec());
+        for &index in &self.path {
+            (key, chain) = slip10_ed25519_child(allocator.clone(), &key, &chain, index);
+        }
+        let pubkey = ed25519_public_key(frontend, &key);
+        pubkey.into_iter().for_each(|w| frontend.output(w));
+    }
+}
+
+#[test]
+fn test_solana_pubkey_wallet_core_vector() {
+    // Public vector from the trust-wallet-core test suite (TWSolanaAddress.HDWallet): this
+    // mnemonic at Solana's default derivation path m/44'/501'/0' gives the address
+    // 2bUBiBNZyD29gP1oV6de7nxowMLoDBtopMMTGgMvjG5m, whose Base58 decoding is the public key
+    // below. The whole pipeline — BIP-39 seed, SLIP-0010 chain, Ed25519 key — runs in-circuit.
+    let out = exec::<_, WP>(&MnemonicToPubkeyCircuit {
+        mnemonic: "shoot island position soft burden budget tooth cruel issue economy destroy above",
+        path: vec![44, 501, 0],
+    })
+    .u8;
+    assert_eq!(
+        to_hex(&out),
+        "17b02c16bf792e54b606db6c2b10a24647a3e96215f5450186e183f57caaf0d0"
+    );
+}

@@ -33,7 +33,7 @@ verified at constant memory by streaming, or recursively lifted to a succinct pr
 | `taproot_output_key` | a private key → Bitcoin Taproot output key (BIP-341/BIP-86) | **yes** 🐘🐘 | BIP-86 vectors, rust-bitcoin |
 | `slip10_ed25519_master`/`_child` | a seed → SLIP-0010 Ed25519 hardened chain | no | SLIP-0010 vectors 1–2 |
 | `ed25519_public_key` | an Ed25519 secret key → public key (RFC 8032) | ed25519 🐘 | RFC 8032 TEST 1–3 |
-| `solana_pubkey` | a seed → Solana public key (`m/44'/501'/account'/0'`) | ed25519 🐘 | SLIP-0010 + independent value |
+| `solana_pubkey` | a seed → Solana public key (`m/44'/501'/account'/0'`) | ed25519 🐘 | wallet-core vector (mnemonic → address, end-to-end in-circuit), SLIP-0010 |
 
 The HMAC-only statements are cheap; the elliptic-curve ones include a scalar multiplication
 ("the elephant"; the Taproot one includes two) and produce large proofs — but are still
