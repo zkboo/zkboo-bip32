@@ -52,6 +52,10 @@ fn test_master_key_bip32_vector_1() {
     let output = exec::<_, WP>(&circuit).u8;
 
     assert_eq!(output.len(), 64, "expected 64 output bytes (IL || IR)");
-    assert_eq!(to_hex(&output[..32]), expected_il, "master private key (IL)");
+    assert_eq!(
+        to_hex(&output[..32]),
+        expected_il,
+        "master private key (IL)"
+    );
     assert_eq!(to_hex(&output[32..]), expected_ir, "master chain code (IR)");
 }

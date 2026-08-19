@@ -55,13 +55,11 @@ fn test_pubkey_one_is_generator() {
     // 1 · G = G.
     let (x, y) = derive(scalar_bytes(1));
     assert_eq!(
-        x,
-        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        x, "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "x of 1·G"
     );
     assert_eq!(
-        y,
-        "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
+        y, "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8",
         "y of 1·G"
     );
 }
@@ -71,13 +69,11 @@ fn test_pubkey_two_is_double_generator() {
     // 2 · G.
     let (x, y) = derive(scalar_bytes(2));
     assert_eq!(
-        x,
-        "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        x, "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "x of 2·G"
     );
     assert_eq!(
-        y,
-        "1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a",
+        y, "1ae168fea63dc339a3c58419466ceaeef7f632653266d0e1236431a950cfe52a",
         "y of 2·G"
     );
 }
