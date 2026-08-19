@@ -6,6 +6,14 @@
 //! Each function returns the *payload* of the address as circuit wires; the textual encoding
 //! (Base58Check for P2PKH/P2SH, bech32 for P2WPKH, bech32m for P2TR) is a host-side encoding of
 //! that public payload and is out of circuit scope.
+//!
+//! **Private-key scalar domain.** Every function here takes the private key as a raw 256-bit
+//! integer `d` and computes `d·G`, so `d` is used modulo the group order `n`: passing `d ≥ n`
+//! yields the same payload as `d mod n` (a valid but non-canonical, non-unique witness), and
+//! `d ≡ 0 (mod n)` (i.e. `d ∈ {0, n, 2n}`) makes `d·G` the point at infinity, which — via the
+//! `inv(0) = 0` convention in `zkboo-modular` — serializes to a fixed, meaningless sentinel
+//! payload rather than erroring. Callers that need a canonical, meaningful statement must
+//! constrain the witness to `0 < d < n` (as BIP-32 requires) outside this circuit.
 
 use alloc::vec::Vec;
 use zkboo::backend::{Allocator, Backend, Frontend, WordRef};
