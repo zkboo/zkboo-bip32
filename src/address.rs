@@ -11,6 +11,10 @@ use crate::{pubkey::public_key_with_tables, util::word_to_be_bytes};
 
 /// Derives the 20-byte Ethereum address for a private key scalar `d`.
 ///
+/// `d` is taken as a raw 256-bit integer and used modulo the group order `n` (so `d ≥ n` matches
+/// `d mod n`, and `d ≡ 0 (mod n)` yields the infinity-derived sentinel address); constrain
+/// `0 < d < n` outside the circuit for a canonical statement.
+///
 /// Computes the public key `Q = d·G`, serialises it as the 64-byte uncompressed encoding
 /// `x_be ‖ y_be` (no `0x04` prefix, as Ethereum hashes it), takes its Keccak-256 digest and
 /// returns the last 20 bytes.
