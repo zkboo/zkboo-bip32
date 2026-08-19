@@ -5,7 +5,7 @@
 use zkboo::backend::{Backend, Frontend, WordRef};
 use zkboo_ecc::{
     montgomery::{
-        ComputedWindowTables, Curve, CurvePointRef, WindowTables, DEFAULT_COMB_WINDOW_BITS,
+        ComputedWindowTables, Curve, CurvePointRef, DEFAULT_COMB_WINDOW_BITS, WindowTables,
     },
     secp256k1::Secp256k1PM,
 };
