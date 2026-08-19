@@ -28,9 +28,9 @@ verified at constant memory by streaming, or recursively lifted to a succinct pr
 | `public_key` | a private key → secp256k1 public key `d·G` | **yes** 🐘 | 1·G, 2·G |
 | `normal_child_key` | a parent key → non-hardened child | **yes** 🐘 | BIP-32 vector 1, m/0H/1 |
 | `ethereum_address` | a private key → Ethereum address `Keccak256(d·G)[12:]` | **yes** 🐘 | privkey 1, 2 |
-| `pubkey_hash160` | a private key → Bitcoin P2PKH/P2WPKH payload `HASH160(d·G)` | **yes** 🐘 | rust-bitcoin, privkey 1 |
-| `p2sh_p2wpkh_payload` | a private key → Bitcoin wrapped-SegWit P2SH payload | **yes** 🐘 | rust-bitcoin |
-| `taproot_output_key` | a private key → Bitcoin Taproot output key (BIP-341/BIP-86) | **yes** 🐘🐘 | rust-bitcoin |
+| `pubkey_hash160` | a private key → Bitcoin P2PKH/P2WPKH payload `HASH160(d·G)` | **yes** 🐘 | BIP-84 vectors, rust-bitcoin |
+| `p2sh_p2wpkh_payload` | a private key → Bitcoin wrapped-SegWit P2SH payload | **yes** 🐘 | BIP-49 vector, rust-bitcoin |
+| `taproot_output_key` | a private key → Bitcoin Taproot output key (BIP-341/BIP-86) | **yes** 🐘🐘 | BIP-86 vectors, rust-bitcoin |
 
 The first four need only HMAC-SHA512 and are cheap; the secp256k1 ones include a scalar
 multiplication ("the elephant"; the Taproot one includes two) and produce large proofs — but are
