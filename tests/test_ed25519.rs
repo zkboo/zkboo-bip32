@@ -265,3 +265,55 @@ fn test_solana_pubkey_wallet_core_vector() {
         "17b02c16bf792e54b606db6c2b10a24647a3e96215f5450186e183f57caaf0d0"
     );
 }
+
+/// Derives a Solana public key through the public 4-level `solana_pubkey` entry point, from a
+/// mnemonic: BIP-39 seed (all 2048 rounds), then `m/44'/501'/account'/0'`.
+struct MnemonicToSolanaCircuit {
+    mnemonic: &'static str,
+    account: u32,
+}
+
+impl Circuit for MnemonicToSolanaCircuit {
+    fn exec<B: Backend>(&self, frontend: &Frontend<B>) {
+        let allocator = frontend.allocator();
+        let mnemonic = self
+            .mnemonic
+            .bytes()
+            .map(|b| frontend.input(b))
+            .collect::<Vec<_>>();
+        let seed = zkboo_bip32::bip39_seed(
+            allocator,
+            mnemonic,
+            zkboo_bip32::SALT_PREFIX,
+            zkboo_bip32::PBKDF2_ROUNDS,
+        );
+        let pubkey = solana_pubkey(frontend, seed.to_vec(), self.account);
+        pubkey.into_iter().for_each(|w| frontend.output(w));
+    }
+}
+
+#[test]
+fn test_solana_pubkey_four_level_path_external_vector() {
+    // Exercises the public `solana_pubkey` (the full 4-level Phantom path m/44'/501'/account'/0')
+    // against the mnemonic published in Solana's official docs "restore from mnemonic" (BIP44)
+    // cookbook example. The expected public keys (and Base58 addresses) were computed with an
+    // independent implementation using OpenSSL-backed Ed25519, not this circuit.
+    let vectors: [(u32, &str); 2] = [
+        (
+            0,
+            "492e7fa00d302220c584be142f776d1a59317ab2b6f04c9f02bc3f7e931da253",
+        ),
+        (
+            1,
+            "e7f93aa341ce1445f8e82e500a6cb64a5515e519589d455c617c007d993f43b1",
+        ),
+    ];
+    for (account, expected) in vectors {
+        let out = exec::<_, WP>(&MnemonicToSolanaCircuit {
+            mnemonic: "neither lonely flavor argue grass remind eye tag avocado spot unusual intact",
+            account,
+        })
+        .u8;
+        assert_eq!(to_hex(&out), expected, "account {account}");
+    }
+}
