@@ -4,8 +4,7 @@
 
 use alloc::vec::Vec;
 use zkboo::backend::{Allocator, Backend, WordRef};
-use zkboo_hmac::hmac;
-use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};
+use zkboo_sha2::Sha512Hmac;
 
 /// The number of PBKDF2 rounds specified by BIP-39.
 pub const PBKDF2_ROUNDS: usize = 2048;
@@ -37,6 +36,10 @@ pub fn bip39_seed<B: Backend>(
 ) -> [WordRef<B, u8>; 64] {
     assert!(rounds >= 1, "PBKDF2 requires at least one round");
 
+    // The HMAC key (the mnemonic) is fixed across all rounds, so cache its ipad/opad midstates
+    // once — every round then compresses only its two message blocks.
+    let hmac_key = Sha512Hmac::new(allocator.clone(), mnemonic);
+
     // First block input: salt || INT_32_BE(1).
     let mut block: Vec<WordRef<B, u8>> = salt.iter().map(|&b| allocator.alloc(b)).collect();
     for byte in 1u32.to_be_bytes() {
@@ -44,25 +47,13 @@ pub fn bip39_seed<B: Backend>(
     }
 
     // U_1 = HMAC-SHA512(mnemonic, salt || 0x00000001).
-    let u1 = hmac(
-        allocator.clone(),
-        mnemonic.clone(),
-        block,
-        sha512bytes,
-        SHA512_BLOCKSIZE,
-    );
+    let u1 = hmac_key.mac_bytes(allocator.clone(), block);
     let mut acc: [WordRef<B, u8>; 64] = core::array::from_fn(|i| u1[i].clone());
     let mut u_prev: Vec<WordRef<B, u8>> = u1.into_iter().collect();
 
     // U_k = HMAC-SHA512(mnemonic, U_{k-1}); accumulate the XOR.
     for _ in 1..rounds {
-        let u_next = hmac(
-            allocator.clone(),
-            mnemonic.clone(),
-            u_prev,
-            sha512bytes,
-            SHA512_BLOCKSIZE,
-        );
+        let u_next = hmac_key.mac_bytes(allocator.clone(), u_prev);
         acc = core::array::from_fn(|i| acc[i].clone() ^ u_next[i].clone());
         u_prev = u_next.into_iter().collect();
     }
@@ -97,16 +88,11 @@ pub fn bip39_seed_partial<B: Backend>(
     assert_eq!(xor_prefix.len(), 64, "xor_prefix must be 64 bytes");
     assert!(remaining_rounds >= 1, "at least one remaining round");
 
+    let hmac_key = Sha512Hmac::new(allocator.clone(), mnemonic);
     let mut acc: [WordRef<B, u8>; 64] = core::array::from_fn(|i| xor_prefix[i].clone());
     let mut u_prev = prev_u;
     for _ in 0..remaining_rounds {
-        let u_next = hmac(
-            allocator.clone(),
-            mnemonic.clone(),
-            u_prev,
-            sha512bytes,
-            SHA512_BLOCKSIZE,
-        );
+        let u_next = hmac_key.mac_bytes(allocator.clone(), u_prev);
         acc = core::array::from_fn(|i| acc[i].clone() ^ u_next[i].clone());
         u_prev = u_next.into_iter().collect();
     }
