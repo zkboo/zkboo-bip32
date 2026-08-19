@@ -28,17 +28,22 @@ verified at constant memory by streaming, or recursively lifted to a succinct pr
 | `public_key` | a private key → secp256k1 public key `d·G` | **yes** 🐘 | 1·G, 2·G |
 | `normal_child_key` | a parent key → non-hardened child | **yes** 🐘 | BIP-32 vector 1, m/0H/1 |
 | `ethereum_address` | a private key → Ethereum address `Keccak256(d·G)[12:]` | **yes** 🐘 | privkey 1, 2 |
+| `pubkey_hash160` | a private key → Bitcoin P2PKH/P2WPKH payload `HASH160(d·G)` | **yes** 🐘 | rust-bitcoin, privkey 1 |
+| `p2sh_p2wpkh_payload` | a private key → Bitcoin wrapped-SegWit P2SH payload | **yes** 🐘 | rust-bitcoin |
+| `taproot_output_key` | a private key → Bitcoin Taproot output key (BIP-341/BIP-86) | **yes** 🐘🐘 | rust-bitcoin |
 
 The first four need only HMAC-SHA512 and are cheap; the secp256k1 ones include a scalar
-multiplication ("the elephant") and produce large proofs — but are still generatable in a secure
-element and verifiable at constant memory.
+multiplication ("the elephant"; the Taproot one includes two) and produce large proofs — but are
+still generatable in a secure element and verifiable at constant memory. The Bitcoin payloads are
+the address bodies before their public textual encoding (Base58Check / bech32 / bech32m), which is
+host-side.
 
 ## Building blocks
 
 Composes the ZKBoo ecosystem crates: [`zkboo-sha2`](https://crates.io/crates/zkboo-sha2)
 (SHA-512), [`zkboo-hmac`](https://crates.io/crates/zkboo-hmac) (HMAC),
-[`zkboo-ecc`](https://crates.io/crates/zkboo-ecc) (secp256k1), and
-`zkboo-keccak` (Keccak-256). `be_bytes_to_word` / `word_to_be_bytes` convert between 32 big-endian
+[`zkboo-ecc`](https://crates.io/crates/zkboo-ecc) (secp256k1),
+`zkboo-keccak` (Keccak-256), and `zkboo-ripemd160` (RIPEMD-160, for Bitcoin's HASH160). `be_bytes_to_word` / `word_to_be_bytes` convert between 32 big-endian
 bytes and a 256-bit (4×u64) word.
 
 ## Usage

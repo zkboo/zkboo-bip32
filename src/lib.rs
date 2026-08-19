@@ -12,6 +12,7 @@
 extern crate alloc;
 
 mod address;
+mod bitcoin;
 mod child;
 mod master;
 mod pubkey;
@@ -19,6 +20,11 @@ mod seed;
 mod util;
 
 pub use address::{ethereum_address, ethereum_address_with_tables};
+pub use bitcoin::{
+    TAP_TWEAK_TAG_HASH, compressed_pubkey, hash160, p2sh_p2wpkh_payload,
+    p2sh_p2wpkh_payload_with_tables, pubkey_hash160, pubkey_hash160_with_tables, tagged_hash,
+    taproot_output_key, taproot_output_key_with_tables,
+};
 pub use child::{
     HARDENED_OFFSET, hardened_child_key, normal_child_key, normal_child_key_with_tables,
 };
