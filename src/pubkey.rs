@@ -12,6 +12,10 @@ use zkboo_ecc::{
 
 /// Derives the secp256k1 public key `Q = d · G` from a private key scalar `d`.
 ///
+/// `d` is taken as a raw 256-bit integer and used modulo the group order `n`, so `d ≥ n` gives the
+/// same key as `d mod n`, and `d ≡ 0 (mod n)` yields the point at infinity (a fixed sentinel, not
+/// an error). Callers needing a canonical statement must constrain `0 < d < n` outside the circuit.
+///
 /// The scalar `d` is a 256-bit word (4×u64); build it from 32 big-endian witness bytes with
 /// [be_bytes_to_word](crate::be_bytes_to_word). The returned point is in Jacobian coordinates over
 /// the pseudo-Mersenne secp256k1 field; convert/emit it with
