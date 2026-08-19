@@ -20,7 +20,7 @@ use crate::{pubkey::public_key_with_tables, util::word_to_be_bytes};
 /// returns the last 20 bytes.
 ///
 /// Build the scalar from 32 big-endian witness bytes with
-/// [be_bytes_to_word](crate::be_bytes_to_word). As with [public_key], the dominant cost is the
+/// [be_bytes_to_word](crate::be_bytes_to_word). As with [public_key](crate::public_key), the dominant cost is the
 /// secp256k1 scalar multiplication. This convenience form computes the comb tables on demand; use
 /// [`ethereum_address_with_tables`] to control the table source (e.g. watchdog servicing).
 pub fn ethereum_address<B: Backend>(
