@@ -47,8 +47,9 @@ with a single Ed25519 fixed-base multiplication at the end.
 Composes the ZKBoo ecosystem crates: [`zkboo-sha2`](https://crates.io/crates/zkboo-sha2)
 (SHA-512), [`zkboo-hmac`](https://crates.io/crates/zkboo-hmac) (HMAC),
 [`zkboo-ecc`](https://crates.io/crates/zkboo-ecc) (secp256k1 and Ed25519),
-`zkboo-keccak` (Keccak-256), and `zkboo-ripemd160` (RIPEMD-160, for Bitcoin's HASH160). `be_bytes_to_word` / `word_to_be_bytes` convert between 32 big-endian
-bytes and a 256-bit (4×u64) word.
+[`zkboo-keccak`](https://crates.io/crates/zkboo-keccak) (Keccak-256), and
+[`zkboo-ripemd160`](https://crates.io/crates/zkboo-ripemd160) (RIPEMD-160, for Bitcoin's HASH160).
+`be_bytes_to_word` / `word_to_be_bytes` convert between 32 big-endian bytes and a 256-bit (4×u64) word.
 
 ## Usage
 
@@ -79,7 +80,10 @@ transaction hash) so they cannot be replayed to authorise a different operation.
 
 Measured locally (release, parallel, BLAKE3, `usize` refcounts; "prover" is the on-device `u8`
 estimate). Per-response figures; a full 128-bit-post-quantum proof is `response × 438` independent
-responses.
+responses. These figures cover the original circuits and predate the Bitcoin (HASH160, P2SH,
+Taproot) and Solana (Ed25519, SLIP-0010) circuits, which are not yet benchmarked; note also that
+`zkboo-harness` now defaults to Keccak-256 as the proof hash, so re-measuring through it reflects
+Keccak-256 rather than the BLAKE3 numbers below.
 
 | circuit | response | prover RAM | exec | prove (par) | verify (par) |
 |---|---:|---:|---:|---:|---:|
