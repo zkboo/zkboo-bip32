@@ -14,6 +14,7 @@ extern crate alloc;
 mod address;
 mod bitcoin;
 mod child;
+mod ed25519;
 mod master;
 mod pubkey;
 mod seed;
@@ -27,6 +28,10 @@ pub use bitcoin::{
 };
 pub use child::{
     HARDENED_OFFSET, hardened_child_key, normal_child_key, normal_child_key_with_tables,
+};
+pub use ed25519::{
+    SLIP10_ED25519_HMAC_KEY, SOLANA_COIN_TYPE, ed25519_public_key, ed25519_public_key_with_tables,
+    slip10_ed25519_child, slip10_ed25519_master, solana_pubkey, solana_pubkey_with_tables,
 };
 pub use master::{MASTER_KEY_HMAC_KEY, master_key};
 pub use pubkey::{public_key, public_key_with_tables};

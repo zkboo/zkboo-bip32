@@ -31,18 +31,22 @@ verified at constant memory by streaming, or recursively lifted to a succinct pr
 | `pubkey_hash160` | a private key → Bitcoin P2PKH/P2WPKH payload `HASH160(d·G)` | **yes** 🐘 | BIP-84 vectors, rust-bitcoin |
 | `p2sh_p2wpkh_payload` | a private key → Bitcoin wrapped-SegWit P2SH payload | **yes** 🐘 | BIP-49 vector, rust-bitcoin |
 | `taproot_output_key` | a private key → Bitcoin Taproot output key (BIP-341/BIP-86) | **yes** 🐘🐘 | BIP-86 vectors, rust-bitcoin |
+| `slip10_ed25519_master`/`_child` | a seed → SLIP-0010 Ed25519 hardened chain | no | SLIP-0010 vectors 1–2 |
+| `ed25519_public_key` | an Ed25519 secret key → public key (RFC 8032) | ed25519 🐘 | RFC 8032 TEST 1–3 |
+| `solana_pubkey` | a seed → Solana public key (`m/44'/501'/account'/0'`) | ed25519 🐘 | SLIP-0010 + independent value |
 
-The first four need only HMAC-SHA512 and are cheap; the secp256k1 ones include a scalar
-multiplication ("the elephant"; the Taproot one includes two) and produce large proofs — but are
-still generatable in a secure element and verifiable at constant memory. The Bitcoin payloads are
-the address bodies before their public textual encoding (Base58Check / bech32 / bech32m), which is
-host-side.
+The HMAC-only statements are cheap; the elliptic-curve ones include a scalar multiplication
+("the elephant"; the Taproot one includes two) and produce large proofs — but are still
+generatable in a secure element and verifiable at constant memory. Address payloads are the
+bodies before their public textual encoding (Base58Check / bech32 / bech32m / Base58), which is
+host-side. Solana derivation (SLIP-0010) is hardened-only, so its whole chain is HMAC-SHA512
+with a single Ed25519 fixed-base multiplication at the end.
 
 ## Building blocks
 
 Composes the ZKBoo ecosystem crates: [`zkboo-sha2`](https://crates.io/crates/zkboo-sha2)
 (SHA-512), [`zkboo-hmac`](https://crates.io/crates/zkboo-hmac) (HMAC),
-[`zkboo-ecc`](https://crates.io/crates/zkboo-ecc) (secp256k1),
+[`zkboo-ecc`](https://crates.io/crates/zkboo-ecc) (secp256k1 and Ed25519),
 `zkboo-keccak` (Keccak-256), and `zkboo-ripemd160` (RIPEMD-160, for Bitcoin's HASH160). `be_bytes_to_word` / `word_to_be_bytes` convert between 32 big-endian
 bytes and a 256-bit (4×u64) word.
 
