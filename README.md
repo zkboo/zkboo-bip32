@@ -98,11 +98,12 @@ The headline: **every prover fits a secure element's RAM budget** (single-digit 
 full Ethereum-address binding. The elephant is proof *size*, not prover memory — and a ~42 MB
 response has been streamed and verified end-to-end at constant (~MB) memory. See `zkboo-harness` to reproduce.
 
-## 🚧 Warning 🚧
+## ⚠️ Unaudited ⚠️
 
-Work in progress, not yet suitable for production. Security has not been audited; the lifting
-protocol details (which intermediate state is the quantum-hard witness, validity enforcement) are
-not finalised here.
+The public API is stable as of 1.0.0, but this implementation has not undergone an external
+security review; the lifting protocol details (which intermediate state is the quantum-hard
+witness, validity enforcement) are not finalised here.
+Use at your own risk.
 
 ## License
 
