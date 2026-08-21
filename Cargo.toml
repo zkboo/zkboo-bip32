@@ -5,6 +5,10 @@ edition = "2024"
 license = "LGPL-3.0-or-later"
 description = "BIP-32 hierarchical-deterministic key derivation as ZKBoo circuits, for proof of seed."
 repository = "https://github.com/zkboo/zkboo-bip32"
+documentation = "https://docs.rs/zkboo-bip32"
+readme = "README.md"
+keywords = ["zk", "zero-knowledge", "zkboo", "bip32", "bip39"]
+categories = ["cryptography::cryptocurrencies", "cryptography", "no-std"]
 
 [dependencies]
 zkboo = { version = "1.0.0", features = ["u32", "u64"] }
