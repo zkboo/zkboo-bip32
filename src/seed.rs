@@ -21,7 +21,10 @@ pub const SALT_PREFIX: &[u8] = b"mnemonic";
 /// the seed is `U_1 xor U_2 xor … xor U_rounds`.
 ///
 /// `mnemonic` is the password (typically the secret witness — the UTF-8 NFKD bytes of the mnemonic
-/// sentence); `salt` is the full public salt `"mnemonic" || passphrase` (UTF-8 NFKD). Pass
+/// sentence); `salt` is the full salt `"mnemonic" || passphrase` (UTF-8 NFKD), allocated here as
+/// **public circuit constants**. A verifier needs every constant to rebuild the circuit, so this
+/// form publishes the passphrase to whoever verifies the proof; use
+/// [`bip39_seed_with_salt_words`] with witness words to disclose only its length. Pass
 /// `rounds = PBKDF2_ROUNDS` for spec-compliant derivation; smaller values are useful for
 /// development (a full 2048-round proof is large).
 ///
@@ -34,14 +37,36 @@ pub fn bip39_seed<B: Backend>(
     salt: &[u8],
     rounds: usize,
 ) -> [WordRef<B, u8>; 64] {
+    let salt = salt.iter().map(|&b| allocator.alloc(b)).collect();
+    return bip39_seed_with_salt_words(allocator, mnemonic, salt, rounds);
+}
+
+/// [`bip39_seed`] with the salt supplied as circuit words, so the caller chooses whether it is
+/// public or witness.
+///
+/// The distinction is not cosmetic. A word made with `Allocator::alloc` is a public circuit
+/// constant, and a verifier needs every constant to rebuild the circuit; a word made with
+/// `Frontend::input` is witness, and the verifier learns only that one was there. Since the BIP-39
+/// salt is `"mnemonic" || passphrase`, allocating it publishes the passphrase to anyone who
+/// verifies the proof, whereas supplying it as witness discloses only its length.
+///
+/// Passing `salt.iter().map(|&b| allocator.alloc(b))` reproduces [`bip39_seed`] exactly, so
+/// existing public-salt circuits are unaffected by the existence of this entry point.
+pub fn bip39_seed_with_salt_words<B: Backend>(
+    allocator: Allocator<B>,
+    mnemonic: Vec<WordRef<B, u8>>,
+    salt: Vec<WordRef<B, u8>>,
+    rounds: usize,
+) -> [WordRef<B, u8>; 64] {
     assert!(rounds >= 1, "PBKDF2 requires at least one round");
 
     // The HMAC key (the mnemonic) is fixed across all rounds, so cache its ipad/opad midstates
     // once — every round then compresses only its two message blocks.
     let hmac_key = Sha512Hmac::new(allocator.clone(), mnemonic);
 
-    // First block input: salt || INT_32_BE(1).
-    let mut block: Vec<WordRef<B, u8>> = salt.iter().map(|&b| allocator.alloc(b)).collect();
+    // First block input: salt || INT_32_BE(1). The block counter is public in either mode: it is
+    // fixed by PBKDF2, not by the user.
+    let mut block: Vec<WordRef<B, u8>> = salt;
     for byte in 1u32.to_be_bytes() {
         block.push(allocator.alloc(byte));
     }

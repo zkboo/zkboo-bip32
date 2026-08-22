@@ -35,5 +35,7 @@ pub use ed25519::{
 };
 pub use master::{MASTER_KEY_HMAC_KEY, master_key};
 pub use pubkey::{public_key, public_key_with_tables};
-pub use seed::{PBKDF2_ROUNDS, SALT_PREFIX, bip39_seed, bip39_seed_partial};
+pub use seed::{
+    PBKDF2_ROUNDS, SALT_PREFIX, bip39_seed, bip39_seed_partial, bip39_seed_with_salt_words,
+};
 pub use util::{be_bytes_to_word, word_to_be_bytes};
