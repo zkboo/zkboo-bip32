@@ -14,24 +14,22 @@ pub const PBKDF2_ROUNDS: usize = 2048;
 pub const SALT_PREFIX: &[u8] = b"mnemonic";
 
 /// Derives the BIP-39 binary seed from a mnemonic via PBKDF2-HMAC-SHA512.
-///
-/// Computes `PBKDF2(HMAC-SHA512, password = mnemonic, salt = "mnemonic" || passphrase,
-/// c = rounds, dkLen = 64)`. Since `dkLen` equals the HMAC-SHA512 output length there is a single
-/// PBKDF2 block: `U_1 = HMAC(mnemonic, salt || 0x00000001)`, `U_k = HMAC(mnemonic, U_{k-1})`, and
-/// the seed is `U_1 xor U_2 xor … xor U_rounds`.
-///
-/// `mnemonic` is the password (typically the secret witness — the UTF-8 NFKD bytes of the mnemonic
-/// sentence); `salt` is the full public salt `"mnemonic" || passphrase` (UTF-8 NFKD). Pass
-/// `rounds = PBKDF2_ROUNDS` for spec-compliant derivation; smaller values are useful for
-/// development (a full 2048-round proof is large).
-///
-/// Note: lifting the full derivation proves knowledge of the mnemonic. To lift a *compromised*
-/// seed one instead proves knowledge of the preimage to the last (few) HMAC application(s); that
-/// partial variant can be built from the same primitive.
 pub fn bip39_seed<B: Backend>(
     allocator: Allocator<B>,
     mnemonic: Vec<WordRef<B, u8>>,
     salt: &[u8],
+    rounds: usize,
+) -> [WordRef<B, u8>; 64] {
+    let salt = salt.iter().map(|&b| allocator.alloc(b)).collect();
+    return bip39_seed_with_salt_words(allocator, mnemonic, salt, rounds);
+}
+
+/// [`bip39_seed`] with the salt supplied as circuit words, so the caller chooses whether it is
+/// public or witness.
+pub fn bip39_seed_with_salt_words<B: Backend>(
+    allocator: Allocator<B>,
+    mnemonic: Vec<WordRef<B, u8>>,
+    salt: Vec<WordRef<B, u8>>,
     rounds: usize,
 ) -> [WordRef<B, u8>; 64] {
     assert!(rounds >= 1, "PBKDF2 requires at least one round");
@@ -40,8 +38,9 @@ pub fn bip39_seed<B: Backend>(
     // once — every round then compresses only its two message blocks.
     let hmac_key = Sha512Hmac::new(allocator.clone(), mnemonic);
 
-    // First block input: salt || INT_32_BE(1).
-    let mut block: Vec<WordRef<B, u8>> = salt.iter().map(|&b| allocator.alloc(b)).collect();
+    // First block input: salt || INT_32_BE(1). The block counter is public in either mode: it is
+    // fixed by PBKDF2, not by the user.
+    let mut block: Vec<WordRef<B, u8>> = salt;
     for byte in 1u32.to_be_bytes() {
         block.push(allocator.alloc(byte));
     }
