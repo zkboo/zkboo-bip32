@@ -16,9 +16,9 @@ mod util;
 
 pub use address::{ethereum_address, ethereum_address_with_tables};
 pub use bitcoin::{
-    TAP_TWEAK_TAG_HASH, compressed_pubkey, hash160, p2sh_p2wpkh_payload,
-    p2sh_p2wpkh_payload_with_tables, pubkey_hash160, pubkey_hash160_with_tables, tagged_hash,
-    taproot_output_key, taproot_output_key_with_tables,
+    TAP_TWEAK_TAG_HASH, TaprootAdvice, compressed_pubkey, compressed_pubkey_affine, hash160,
+    p2sh_p2wpkh_payload, p2sh_p2wpkh_payload_with_tables, pubkey_hash160,
+    pubkey_hash160_with_tables, tagged_hash, taproot_output_key, taproot_output_key_with_tables,
 };
 pub use child::{
     HARDENED_OFFSET, hardened_child_key, normal_child_key, normal_child_key_with_tables,
@@ -28,7 +28,11 @@ pub use ed25519::{
     slip10_ed25519_child, slip10_ed25519_master, solana_pubkey, solana_pubkey_with_tables,
 };
 pub use master::{MASTER_KEY_HMAC_KEY, master_key};
-pub use pubkey::{public_key, public_key_with_tables};
+pub use pubkey::{
+    AffinePoint, PublicKeyAdvice, public_key, public_key_advice, public_key_advice_shape,
+    public_key_advice_with_tables, public_key_affine, public_key_affine_with_tables,
+    public_key_with_tables,
+};
 pub use seed::{
     PBKDF2_ROUNDS, SALT_PREFIX, bip39_seed, bip39_seed_partial, bip39_seed_with_salt_words,
 };

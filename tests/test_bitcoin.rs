@@ -10,14 +10,29 @@ use bitcoin::{
     key::{Secp256k1, TapTweak, UntweakedPublicKey},
     secp256k1::SecretKey,
 };
+use zkboo::circuit::Assertions;
+use zkboo::word::CompositeWord;
 use zkboo::{
     backend::{Backend, Frontend},
     circuit::Circuit,
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::{
-    TAP_TWEAK_TAG_HASH, be_bytes_to_word, p2sh_p2wpkh_payload, pubkey_hash160, taproot_output_key,
+    TAP_TWEAK_TAG_HASH, TaprootAdvice, be_bytes_to_word, p2sh_p2wpkh_payload, public_key_advice,
+    pubkey_hash160, taproot_output_key,
 };
+
+/// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
+///
+/// The prover's view — advice is computed from the witness it already holds.
+fn be_words(bytes: &[u8]) -> CompositeWord<u64, 4> {
+    let mut limbs = [0u64; 4];
+    for (i, chunk) in bytes.chunks(8).enumerate() {
+        limbs[i] = u64::from_be_bytes(chunk.try_into().expect("eight bytes"));
+    }
+    return CompositeWord::from_be_words(limbs);
+}
+
 
 type WP = OwnedFlexibleWordPool<usize>;
 
@@ -41,17 +56,26 @@ impl Circuit for BitcoinCircuit {
             .map(|&b| frontend.input(b))
             .collect::<Vec<_>>();
         let scalar = be_bytes_to_word(&bytes);
+        let mut asserts = Assertions::new();
+        let key = be_words(&self.private_key);
         match self.payload {
-            Payload::PubkeyHash => pubkey_hash160(frontend, scalar)
-                .into_iter()
-                .for_each(|w| frontend.output(w)),
-            Payload::P2shP2wpkh => p2sh_p2wpkh_payload(frontend, scalar)
-                .into_iter()
-                .for_each(|w| frontend.output(w)),
-            Payload::Taproot => taproot_output_key(frontend, scalar)
-                .into_iter()
-                .for_each(|w| frontend.output(w)),
+            Payload::PubkeyHash => {
+                pubkey_hash160(frontend, scalar, &public_key_advice(key), &mut asserts)
+                    .into_iter()
+                    .for_each(|w| frontend.output(w))
+            }
+            Payload::P2shP2wpkh => {
+                p2sh_p2wpkh_payload(frontend, scalar, &public_key_advice(key), &mut asserts)
+                    .into_iter()
+                    .for_each(|w| frontend.output(w))
+            }
+            Payload::Taproot => {
+                taproot_output_key(frontend, scalar, &TaprootAdvice::compute(key), &mut asserts)
+                    .into_iter()
+                    .for_each(|w| frontend.output(w))
+            }
         }
+        asserts.output(frontend);
     }
 }
 
@@ -61,12 +85,16 @@ fn scalar(value: u8) -> [u8; 32] {
     return key;
 }
 
+/// The payload, with the circuit's assertion flag checked and stripped.
 fn run(private_key: [u8; 32], payload: Payload) -> Vec<u8> {
-    return exec::<_, WP>(&BitcoinCircuit {
+    let mut out = exec::<_, WP>(&BitcoinCircuit {
         private_key,
         payload,
     })
     .u8;
+    let flag = out.pop().expect("the circuit outputs its assertion flag");
+    assert_eq!(flag, 1, "the derivation's assertions did not hold");
+    return out;
 }
 
 /// A few fixed test scalars: small ones plus arbitrary 32-byte values, giving both `y` parities.

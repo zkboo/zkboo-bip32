@@ -3,47 +3,92 @@
 //! secp256k1 public-key derivation from a private key.
 
 use zkboo::backend::{Backend, Frontend, WordRef};
+use zkboo::circuit::Assertions;
+use zkboo::word::CompositeWord;
 use zkboo_ecc::{
     montgomery::{
-        ComputedWindowTables, Curve, CurvePointRef, DEFAULT_COMB_WINDOW_BITS, WindowTables,
+        AffineCombAdvice, ComputedWindowTables, Curve, CurvePointRef, DEFAULT_COMB_WINDOW_BITS,
+        WindowTables,
     },
-    secp256k1::Secp256k1PM,
+    secp256k1::{Secp256k1FieldPM, Secp256k1PM},
 };
+use zkboo_modular::montgomery::MontgomeryWordRef;
+
+/// The advice a public-key derivation needs: one comb slope per window.
+pub type PublicKeyAdvice = AffineCombAdvice<u64, 4>;
+
+/// Computes the advice for `d · G` at the default window width, on the host.
+pub fn public_key_advice(private_key: CompositeWord<u64, 4>) -> PublicKeyAdvice {
+    let mut tables = ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
+    return public_key_advice_with_tables(private_key, &mut tables);
+}
+
+/// [`public_key_advice`] with a caller-supplied comb-table source.
+pub fn public_key_advice_with_tables(
+    private_key: CompositeWord<u64, 4>,
+    tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
+) -> PublicKeyAdvice {
+    return AffineCombAdvice::compute(Secp256k1PM, private_key, tables);
+}
+
+/// The advice's shape without its values, for a verifier, at the default window width.
+pub fn public_key_advice_shape() -> PublicKeyAdvice {
+    return AffineCombAdvice::zeros(256, DEFAULT_COMB_WINDOW_BITS);
+}
+
+/// A secp256k1 point in affine coordinates over the pseudo-Mersenne field.
+pub type AffinePoint<B> = (
+    MontgomeryWordRef<B, u64, 4, Secp256k1FieldPM>,
+    MontgomeryWordRef<B, u64, 4, Secp256k1FieldPM>,
+);
 
 /// Derives the secp256k1 public key `Q = d · G` from a private key scalar `d`.
-///
-/// `d` is taken as a raw 256-bit integer and used modulo the group order `n`, so `d ≥ n` gives the
-/// same key as `d mod n`, and `d ≡ 0 (mod n)` yields the point at infinity (a fixed sentinel, not
-/// an error). Callers needing a canonical statement must constrain `0 < d < n` outside the circuit.
-///
-/// The scalar `d` is a 256-bit word (4×u64); build it from 32 big-endian witness bytes with
-/// [be_bytes_to_word](crate::be_bytes_to_word). The returned point is in Jacobian coordinates over
-/// the pseudo-Mersenne secp256k1 field; convert/emit it with
-/// [PointFrontendIO::point_output_affine](zkboo_ecc::montgomery::PointFrontendIO::point_output_affine)
-/// to obtain the affine `(x, y)`.
-///
-/// This uses the **fixed-base comb** over the **pseudo-Mersenne** field: because `G` is a public
-/// constant, every multiple `2^i·G` is precomputed at circuit-build time, so the secret scalar
-/// drives only a small number of oblivious table selects and additions — no in-circuit doublings.
-/// Together these make the public-key statement roughly an order of magnitude smaller than the
-/// generic variable-base double-and-add ladder, while remaining fully data-oblivious.
-///
-/// This convenience form computes the comb tables on demand at the default window width. To
-/// control the table source — e.g. on a secure element, where the native table computation must
-/// service a watchdog — use [`public_key_with_tables`].
 pub fn public_key<B: Backend>(
     frontend: &Frontend<B>,
     private_key: WordRef<B, u64, 4>,
+    advice: &PublicKeyAdvice,
+    assertions: &mut Assertions<B>,
 ) -> CurvePointRef<B, u64, 4, Secp256k1PM> {
     let mut tables = ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
-    return public_key_with_tables(frontend, private_key, &mut tables);
+    return public_key_with_tables(frontend, private_key, &mut tables, advice, assertions);
+}
+
+/// [`public_key`], returning the affine coordinates `(x, y)` rather than a point.
+pub fn public_key_affine<B: Backend>(
+    frontend: &Frontend<B>,
+    private_key: WordRef<B, u64, 4>,
+    advice: &PublicKeyAdvice,
+    assertions: &mut Assertions<B>,
+) -> AffinePoint<B> {
+    let mut tables = ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
+    return public_key_affine_with_tables(frontend, private_key, &mut tables, advice, assertions);
+}
+
+/// [`public_key_affine`] with a caller-supplied comb-table source.
+pub fn public_key_affine_with_tables<B: Backend>(
+    frontend: &Frontend<B>,
+    private_key: WordRef<B, u64, 4>,
+    tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
+    advice: &PublicKeyAdvice,
+    assertions: &mut Assertions<B>,
+) -> AffinePoint<B> {
+    return Secp256k1PM.mul_secret_scalar_affine(
+        frontend,
+        private_key,
+        tables,
+        advice,
+        assertions,
+    );
 }
 
 /// [`public_key`] with a caller-supplied comb-table source.
 pub fn public_key_with_tables<B: Backend>(
-    _frontend: &Frontend<B>,
+    frontend: &Frontend<B>,
     private_key: WordRef<B, u64, 4>,
     tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
+    advice: &PublicKeyAdvice,
+    assertions: &mut Assertions<B>,
 ) -> CurvePointRef<B, u64, 4, Secp256k1PM> {
-    return Secp256k1PM.mul_secret_scalar(private_key, tables);
+    let (x, y) = public_key_affine_with_tables(frontend, private_key, tables, advice, assertions);
+    return CurvePointRef::from_affine(x, y, Secp256k1PM);
 }

@@ -3,12 +3,26 @@
 //! Validates normal (non-hardened) child derivation against BIP-32 test vector 1, chain m/0H/1.
 //! See: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#test-vector-1
 
+use zkboo::circuit::Assertions;
+use zkboo::word::CompositeWord;
 use zkboo::{
     backend::{Backend, Frontend},
     circuit::Circuit,
     executor::{OwnedFlexibleWordPool, exec},
 };
-use zkboo_bip32::normal_child_key;
+use zkboo_bip32::{normal_child_key, public_key_advice};
+
+/// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
+///
+/// The prover's view — advice is computed from the witness it already holds.
+fn be_words(bytes: &[u8]) -> CompositeWord<u64, 4> {
+    let mut limbs = [0u64; 4];
+    for (i, chunk) in bytes.chunks(8).enumerate() {
+        limbs[i] = u64::from_be_bytes(chunk.try_into().expect("eight bytes"));
+    }
+    return CompositeWord::from_be_words(limbs);
+}
+
 
 type WP = OwnedFlexibleWordPool<usize>;
 
@@ -30,12 +44,21 @@ impl Circuit for NormalChildCircuit {
             .iter()
             .map(|&b| frontend.input(b))
             .collect::<Vec<_>>();
-        let (child_priv, child_chain_code) =
-            normal_child_key(frontend, chain_code, parent_priv, self.index);
+        let mut asserts = Assertions::new();
+        let advice = public_key_advice(be_words(&self.parent_priv));
+        let (child_priv, child_chain_code) = normal_child_key(
+            frontend,
+            chain_code,
+            parent_priv,
+            self.index,
+            &advice,
+            &mut asserts,
+        );
         frontend.output(child_priv);
         child_chain_code
             .into_iter()
             .for_each(|w| frontend.output(w));
+        asserts.output(frontend);
     }
 }
 
@@ -70,6 +93,15 @@ fn test_normal_child_bip32_vector_1_m_0h_1() {
     let child_priv_hex = format!("{:016x}{:016x}{:016x}{:016x}", w[3], w[2], w[1], w[0]);
     assert_eq!(child_priv_hex, expected_child_priv, "child private key");
 
-    assert_eq!(output.u8.len(), 32, "expected 32 chain-code bytes");
-    assert_eq!(to_hex(&output.u8), expected_child_chain, "child chain code");
+    assert_eq!(
+        output.u8.len(),
+        33,
+        "expected 32 chain-code bytes and an assertion flag"
+    );
+    assert_eq!(output.u8[32], 1, "the derivation's assertions did not hold");
+    assert_eq!(
+        to_hex(&output.u8[..32]),
+        expected_child_chain,
+        "child chain code"
+    );
 }

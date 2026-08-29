@@ -5,6 +5,7 @@
 use alloc::vec::Vec;
 use zkboo::{
     backend::{Allocator, Backend, Frontend, WordRef},
+    circuit::Assertions,
     word::CompositeWord,
 };
 use zkboo_ecc::montgomery::{ComputedWindowTables, Curve, DEFAULT_COMB_WINDOW_BITS, WindowTables};
@@ -13,7 +14,7 @@ use zkboo_hmac::hmac;
 use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};
 
 use crate::{
-    pubkey::public_key_with_tables,
+    pubkey::{PublicKeyAdvice, public_key_affine_with_tables},
     util::{be_bytes_to_word, word_to_be_bytes},
 };
 
@@ -95,6 +96,8 @@ pub fn normal_child_key<B: Backend>(
     parent_chain_code: Vec<WordRef<B, u8>>,
     parent_private_key: Vec<WordRef<B, u8>>,
     index: u32,
+    advice: &PublicKeyAdvice,
+    assertions: &mut Assertions<B>,
 ) -> (WordRef<B, u64, 4>, [WordRef<B, u8>; 32]) {
     let mut tables = ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
     return normal_child_key_with_tables(
@@ -103,6 +106,8 @@ pub fn normal_child_key<B: Backend>(
         parent_private_key,
         index,
         &mut tables,
+        advice,
+        assertions,
     );
 }
 
@@ -113,6 +118,8 @@ pub fn normal_child_key_with_tables<B: Backend>(
     parent_private_key: Vec<WordRef<B, u8>>,
     index: u32,
     tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
+    advice: &PublicKeyAdvice,
+    assertions: &mut Assertions<B>,
 ) -> (WordRef<B, u64, 4>, [WordRef<B, u8>; 32]) {
     assert!(
         index < HARDENED_OFFSET,
@@ -127,9 +134,7 @@ pub fn normal_child_key_with_tables<B: Backend>(
 
     // Parent public key Q = d·G, in SEC1 compressed form: (0x02 | y_parity) || x_be.
     let scalar = be_bytes_to_word(&parent_private_key);
-    let (x, y, _, _) = public_key_with_tables(frontend, scalar, tables)
-        .to_affine()
-        .destructure();
+    let (x, y) = public_key_affine_with_tables(frontend, scalar, tables, advice, assertions);
     let prefix = y.value().lsb().select_const_const(0x03u8, 0x02u8);
     let x_bytes = word_to_be_bytes(x.value());
 
