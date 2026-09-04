@@ -4,7 +4,7 @@
 
 use zkboo::backend::{Backend, Frontend, WordRef};
 use zkboo::circuit::Assertions;
-use zkboo_ecc::montgomery::{ComputedWindowTables, Curve, DEFAULT_COMB_WINDOW_BITS, WindowTables};
+use zkboo_ecc::weierstrass::{ComputedWindowTables, Curve, DEFAULT_COMB_WINDOW_BITS, WindowTables};
 use zkboo_ecc::secp256k1::Secp256k1PM;
 use zkboo_keccak::keccak256;
 

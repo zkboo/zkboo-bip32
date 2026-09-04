@@ -7,7 +7,7 @@ use crate::child::HARDENED_OFFSET;
 use alloc::vec::Vec;
 use zkboo::backend::{Allocator, Backend, Frontend, WordRef};
 use zkboo_ecc::edwards::{
-    ComputedEdwardsWindowTables, EdwardsPoint, EdwardsWindowTables, edwards_mul_secret_scalar,
+    ComputedWindowTables, Point, WindowTables, mul_secret_scalar,
 };
 use zkboo_hmac::hmac;
 use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};
@@ -70,16 +70,16 @@ pub fn ed25519_public_key<B: Backend>(
     frontend: &Frontend<B>,
     secret_key: &[WordRef<B, u8>; 32],
 ) -> [WordRef<B, u8>; 32] {
-    let mut tables = ComputedEdwardsWindowTables::new(EdwardsPoint::base(), WINDOW_BITS);
+    let mut tables = ComputedWindowTables::new(Point::base(), WINDOW_BITS);
     return ed25519_public_key_with_tables(frontend, secret_key, &mut tables);
 }
 
 /// [`ed25519_public_key`] with a caller-supplied comb-table source (built for
-/// [`EdwardsPoint::base`]).
+/// [`Point::base`]).
 pub fn ed25519_public_key_with_tables<B: Backend>(
     frontend: &Frontend<B>,
     secret_key: &[WordRef<B, u8>; 32],
-    tables: &mut impl EdwardsWindowTables,
+    tables: &mut impl WindowTables,
 ) -> [WordRef<B, u8>; 32] {
     let digest = sha512bytes(frontend.allocator(), secret_key.to_vec());
     // Clamp the low 32 digest bytes: clear the low 3 bits of byte 0 and the top bit of byte 31,
@@ -94,7 +94,7 @@ pub fn ed25519_public_key_with_tables<B: Backend>(
             .expect("8 bytes per limb")
     });
     let scalar = WordRef::from_le_words(limbs);
-    return edwards_mul_secret_scalar(scalar, tables).compress();
+    return mul_secret_scalar(scalar, tables).compress();
 }
 
 /// Derives the 32-byte Solana public key for `account` from a BIP-39 seed, along the standard
@@ -104,16 +104,16 @@ pub fn solana_pubkey<B: Backend>(
     seed: Vec<WordRef<B, u8>>,
     account: u32,
 ) -> [WordRef<B, u8>; 32] {
-    let mut tables = ComputedEdwardsWindowTables::new(EdwardsPoint::base(), WINDOW_BITS);
+    let mut tables = ComputedWindowTables::new(Point::base(), WINDOW_BITS);
     return solana_pubkey_with_tables(frontend, seed, account, &mut tables);
 }
 
-/// [`solana_pubkey`] with a caller-supplied comb-table source (built for [`EdwardsPoint::base`]).
+/// [`solana_pubkey`] with a caller-supplied comb-table source (built for [`Point::base`]).
 pub fn solana_pubkey_with_tables<B: Backend>(
     frontend: &Frontend<B>,
     seed: Vec<WordRef<B, u8>>,
     account: u32,
-    tables: &mut impl EdwardsWindowTables,
+    tables: &mut impl WindowTables,
 ) -> [WordRef<B, u8>; 32] {
     let allocator = frontend.allocator();
     let (mut key, mut chain) = slip10_ed25519_master(allocator.clone(), seed);

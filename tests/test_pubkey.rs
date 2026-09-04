@@ -10,7 +10,7 @@ use zkboo::{
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::{be_bytes_to_word, public_key, public_key_advice};
-use zkboo_ecc::montgomery::PointFrontendIO;
+use zkboo_ecc::weierstrass::PointFrontendIO;
 use zkboo::executor::ExecOptions;
 
 /// The private key as a host word: 32 big-endian bytes, four `u64` limbs.

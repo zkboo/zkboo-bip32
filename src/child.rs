@@ -8,7 +8,7 @@ use zkboo::{
     circuit::Assertions,
     word::CompositeWord,
 };
-use zkboo_ecc::montgomery::{ComputedWindowTables, Curve, DEFAULT_COMB_WINDOW_BITS, WindowTables};
+use zkboo_ecc::weierstrass::{ComputedWindowTables, Curve, DEFAULT_COMB_WINDOW_BITS, WindowTables};
 use zkboo_ecc::secp256k1::Secp256k1PM;
 use zkboo_hmac::hmac;
 use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};

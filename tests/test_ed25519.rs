@@ -14,7 +14,7 @@ use zkboo_bip32::{
     ed25519_public_key, ed25519_public_key_with_tables, slip10_ed25519_child,
     slip10_ed25519_master, solana_pubkey,
 };
-use zkboo_ecc::edwards::{ComputedEdwardsWindowTables, EdwardsPoint};
+use zkboo_ecc::edwards::{ComputedWindowTables, Point};
 use zkboo::executor::ExecOptions;
 
 type WP = OwnedFlexibleWordPool<usize>;
@@ -58,7 +58,7 @@ impl Circuit for Slip10Circuit {
             .iter()
             .map(|&b| frontend.input(b))
             .collect::<Vec<_>>();
-        let mut tables = ComputedEdwardsWindowTables::new(EdwardsPoint::base(), 5);
+        let mut tables = ComputedWindowTables::new(Point::base(), 5);
         let (mut key, mut chain) = slip10_ed25519_master(allocator.clone(), seed);
         let mut nodes = vec![key.clone()];
         for &index in &self.path {

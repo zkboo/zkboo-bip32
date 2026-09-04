@@ -8,8 +8,8 @@ use zkboo::backend::{Allocator, Backend, Frontend, WordRef};
 use zkboo::circuit::Assertions;
 use zkboo::executor::{ExecOptions, OwnedFlexibleWordPool, exec};
 use zkboo::word::CompositeWord;
-use zkboo_ecc::montgomery::{
-    ComputedWindowTables, Curve, CurvePointRef, DEFAULT_COMB_WINDOW_BITS,
+use zkboo_ecc::weierstrass::{
+    ComputedWindowTables, Curve, PointRef, DEFAULT_COMB_WINDOW_BITS,
     PointBooleanWordRefSelector, WindowTables,
 };
 use zkboo_ecc::secp256k1::Secp256k1PM;
@@ -42,7 +42,7 @@ pub fn hash160<B: Backend>(
 /// Serialises a secp256k1 point as the 33-byte compressed SEC1 encoding `(0x02 | parity(y)) ‖
 /// x_be`.
 pub fn compressed_pubkey<B: Backend>(
-    point: CurvePointRef<B, u64, 4, Secp256k1PM>,
+    point: PointRef<B, u64, 4, Secp256k1PM>,
 ) -> [WordRef<B, u8>; 33] {
     let (x, y, _, _) = point.to_affine().destructure();
     return compressed_pubkey_affine((x, y));
@@ -186,7 +186,7 @@ impl zkboo::circuit::Circuit for TweakScalar {
             &self.internal,
             &mut assertions,
         );
-        let p = CurvePointRef::from_affine(px, py, Secp256k1PM);
+        let p = PointRef::from_affine(px, py, Secp256k1PM);
         let y_is_odd = p.coords()[1].clone().value().lsb();
         let p_even = y_is_odd.point_select(-p.clone(), p);
         let internal_x = word_to_be_bytes(p_even.coords()[0].clone().value());
@@ -219,7 +219,7 @@ pub fn taproot_output_key_with_tables<B: Backend>(
     // Internal key P = d·G, normalized to even y (BIP-340 x-only lift).
     let (px, py) =
         public_key_affine_with_tables(frontend, private_key, tables, &advice.internal, assertions);
-    let p = CurvePointRef::from_affine(px, py, Secp256k1PM);
+    let p = PointRef::from_affine(px, py, Secp256k1PM);
     let y_is_odd = p.coords()[1].clone().value().lsb();
     let p_even = y_is_odd.point_select(-p.clone(), p);
     let internal_x = word_to_be_bytes(p_even.coords()[0].clone().value());
@@ -233,7 +233,7 @@ pub fn taproot_output_key_with_tables<B: Backend>(
         &advice.tweak,
         assertions,
     );
-    let q = p_even + CurvePointRef::from_affine(tx, ty, Secp256k1PM);
+    let q = p_even + PointRef::from_affine(tx, ty, Secp256k1PM);
     let (x, _, _, _) = q.to_affine().destructure();
     return word_to_be_bytes(x.value())
         .try_into()

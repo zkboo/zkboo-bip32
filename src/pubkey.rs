@@ -6,8 +6,8 @@ use zkboo::backend::{Backend, Frontend, WordRef};
 use zkboo::circuit::Assertions;
 use zkboo::word::CompositeWord;
 use zkboo_ecc::{
-    montgomery::{
-        AffineCombAdvice, ComputedWindowTables, Curve, CurvePointRef, DEFAULT_COMB_WINDOW_BITS,
+    weierstrass::{
+        AffineCombAdvice, ComputedWindowTables, Curve, PointRef, DEFAULT_COMB_WINDOW_BITS,
         WindowTables,
     },
     secp256k1::{Secp256k1FieldPM, Secp256k1PM},
@@ -48,7 +48,7 @@ pub fn public_key<B: Backend>(
     private_key: WordRef<B, u64, 4>,
     advice: &PublicKeyAdvice,
     assertions: &mut Assertions<B>,
-) -> CurvePointRef<B, u64, 4, Secp256k1PM> {
+) -> PointRef<B, u64, 4, Secp256k1PM> {
     let mut tables = ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
     return public_key_with_tables(frontend, private_key, &mut tables, advice, assertions);
 }
@@ -88,7 +88,7 @@ pub fn public_key_with_tables<B: Backend>(
     tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
     advice: &PublicKeyAdvice,
     assertions: &mut Assertions<B>,
-) -> CurvePointRef<B, u64, 4, Secp256k1PM> {
+) -> PointRef<B, u64, 4, Secp256k1PM> {
     let (x, y) = public_key_affine_with_tables(frontend, private_key, tables, advice, assertions);
-    return CurvePointRef::from_affine(x, y, Secp256k1PM);
+    return PointRef::from_affine(x, y, Secp256k1PM);
 }
