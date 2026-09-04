@@ -9,6 +9,7 @@ use zkboo::{
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::{PBKDF2_ROUNDS, SALT_PREFIX, bip39_seed, bip39_seed_partial};
+use zkboo::executor::ExecOptions;
 
 type WP = OwnedFlexibleWordPool<usize>;
 
@@ -84,7 +85,7 @@ fn test_bip39_seed_trezor_vector() {
         salt,
         rounds: PBKDF2_ROUNDS,
     };
-    let output = exec::<_, WP>(&circuit).u8;
+    let output = exec::<_, WP, _>(&circuit, ExecOptions::new()).u8;
 
     assert_eq!(output.len(), 64, "expected a 64-byte seed");
     assert_eq!(to_hex(&output), EXPECTED_SEED, "BIP-39 seed");
@@ -108,7 +109,7 @@ fn test_bip39_seed_partial_last_round() {
         xor_prefix,
         remaining_rounds: 1,
     };
-    let output = exec::<_, WP>(&circuit).u8;
+    let output = exec::<_, WP, _>(&circuit, ExecOptions::new()).u8;
 
     assert_eq!(output.len(), 64, "expected a 64-byte seed");
     assert_eq!(to_hex(&output), EXPECTED_SEED, "BIP-39 seed (partial lift)");

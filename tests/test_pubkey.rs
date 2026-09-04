@@ -11,6 +11,7 @@ use zkboo::{
 };
 use zkboo_bip32::{be_bytes_to_word, public_key, public_key_advice};
 use zkboo_ecc::montgomery::PointFrontendIO;
+use zkboo::executor::ExecOptions;
 
 /// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
 ///
@@ -62,7 +63,7 @@ fn limbs_to_hex(limbs: &[u64]) -> String {
 
 fn derive(private_key: Vec<u8>) -> (String, String) {
     let circuit = PubKeyCircuit { private_key };
-    let out = exec::<_, WP>(&circuit).u64;
+    let out = exec::<_, WP, _>(&circuit, ExecOptions::new()).u64;
     assert_eq!(out.len(), 8, "expected 8 u64 limbs (affine x ‖ y)");
     return (limbs_to_hex(&out[0..4]), limbs_to_hex(&out[4..8]));
 }

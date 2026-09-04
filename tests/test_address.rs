@@ -10,6 +10,7 @@ use zkboo::{
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::{be_bytes_to_word, ethereum_address, public_key_advice};
+use zkboo::executor::ExecOptions;
 
 /// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
 ///
@@ -52,7 +53,7 @@ fn to_hex(bytes: &[u8]) -> String {
 fn address_of(value: u8) -> String {
     let mut private_key = vec![0u8; 32];
     private_key[31] = value;
-    let out = exec::<_, WP>(&AddressCircuit { private_key }).u8;
+    let out = exec::<_, WP, _>(&AddressCircuit { private_key }, ExecOptions::new()).u8;
     assert_eq!(out.len(), 21, "expected a 20-byte address and an assertion flag");
     assert_eq!(out[20], 1, "the derivation's assertions did not hold");
     return to_hex(&out[..20]);

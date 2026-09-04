@@ -11,6 +11,7 @@ use zkboo::{
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::{normal_child_key, public_key_advice};
+use zkboo::executor::ExecOptions;
 
 /// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
 ///
@@ -86,7 +87,7 @@ fn test_normal_child_bip32_vector_1_m_0h_1() {
         parent_priv,
         index: 1,
     };
-    let output = exec::<_, WP>(&circuit);
+    let output = exec::<_, WP, _>(&circuit, ExecOptions::new());
 
     let w = &output.u64;
     assert_eq!(w.len(), 4, "expected 4 u64 limbs for the child private key");

@@ -21,6 +21,7 @@ use zkboo_bip32::{
     TAP_TWEAK_TAG_HASH, TaprootAdvice, be_bytes_to_word, p2sh_p2wpkh_payload, public_key_advice,
     pubkey_hash160, taproot_output_key,
 };
+use zkboo::executor::ExecOptions;
 
 /// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
 ///
@@ -87,10 +88,10 @@ fn scalar(value: u8) -> [u8; 32] {
 
 /// The payload, with the circuit's assertion flag checked and stripped.
 fn run(private_key: [u8; 32], payload: Payload) -> Vec<u8> {
-    let mut out = exec::<_, WP>(&BitcoinCircuit {
+    let mut out = exec::<_, WP, _>(&BitcoinCircuit {
         private_key,
         payload,
-    })
+    }, ExecOptions::new())
     .u8;
     let flag = out.pop().expect("the circuit outputs its assertion flag");
     assert_eq!(flag, 1, "the derivation's assertions did not hold");

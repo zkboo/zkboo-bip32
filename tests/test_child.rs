@@ -9,6 +9,7 @@ use zkboo::{
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::{HARDENED_OFFSET, hardened_child_key};
+use zkboo::executor::ExecOptions;
 
 type WP = OwnedFlexibleWordPool<usize>;
 
@@ -63,7 +64,7 @@ fn test_hardened_child_bip32_vector_1_m_0h() {
         parent_priv,
         index: HARDENED_OFFSET, // m/0H
     };
-    let output = exec::<_, WP>(&circuit);
+    let output = exec::<_, WP, _>(&circuit, ExecOptions::new());
 
     // child private key: 4 u64 words in little-endian word order -> big-endian hex.
     let w = &output.u64;

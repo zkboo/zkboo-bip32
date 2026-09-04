@@ -9,6 +9,7 @@ use zkboo::{
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::master_key;
+use zkboo::executor::ExecOptions;
 
 type WP = OwnedFlexibleWordPool<usize>;
 
@@ -49,7 +50,7 @@ fn test_master_key_bip32_vector_1() {
     let expected_ir = "873dff81c02f525623fd1fe5167eac3a55a049de3d314bb42ee227ffed37d508";
 
     let circuit = MasterKeyCircuit { seed };
-    let output = exec::<_, WP>(&circuit).u8;
+    let output = exec::<_, WP, _>(&circuit, ExecOptions::new()).u8;
 
     assert_eq!(output.len(), 64, "expected 64 output bytes (IL || IR)");
     assert_eq!(

@@ -6,7 +6,7 @@
 use alloc::vec::Vec;
 use zkboo::backend::{Allocator, Backend, Frontend, WordRef};
 use zkboo::circuit::Assertions;
-use zkboo::executor::{OwnedFlexibleWordPool, exec};
+use zkboo::executor::{ExecOptions, OwnedFlexibleWordPool, exec};
 use zkboo::word::CompositeWord;
 use zkboo_ecc::montgomery::{
     ComputedWindowTables, Curve, CurvePointRef, DEFAULT_COMB_WINDOW_BITS,
@@ -144,10 +144,10 @@ impl TaprootAdvice {
     /// Computes both combs' advice, on the host, from the private key.
     pub fn compute(private_key: CompositeWord<u64, 4>) -> Self {
         let internal = public_key_advice(private_key);
-        let scalar = exec::<_, OwnedFlexibleWordPool<usize>>(&TweakScalar {
+        let scalar = exec::<_, OwnedFlexibleWordPool<usize>, _>(&TweakScalar {
             private_key,
             internal: internal.clone(),
-        });
+        }, ExecOptions::new());
         let limbs = scalar.as_vec::<u64>();
         assert_eq!(limbs.len(), 4, "the tweak scalar is four 64-bit limbs");
         let tweak_scalar =

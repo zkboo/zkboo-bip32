@@ -15,6 +15,7 @@ use zkboo_bip32::{
     slip10_ed25519_master, solana_pubkey,
 };
 use zkboo_ecc::edwards::{ComputedEdwardsWindowTables, EdwardsPoint};
+use zkboo::executor::ExecOptions;
 
 type WP = OwnedFlexibleWordPool<usize>;
 
@@ -110,9 +111,9 @@ fn test_ed25519_public_key_rfc8032() {
         ),
     ];
     for (secret, expected) in vectors {
-        let out = exec::<_, WP>(&PubkeyCircuit {
+        let out = exec::<_, WP, _>(&PubkeyCircuit {
             secret_key: hex(secret),
-        })
+        }, ExecOptions::new())
         .u8;
         assert_eq!(to_hex(&out), expected);
     }
@@ -121,11 +122,11 @@ fn test_ed25519_public_key_rfc8032() {
 /// Checks a SLIP-0010 chain against published (private key, public key) pairs per node; the
 /// published public keys carry SLIP-0010's leading 0x00, which is stripped.
 fn check_slip10_chain(seed: &str, path: Vec<u32>, nodes: &[(&str, &str)]) {
-    let out = exec::<_, WP>(&Slip10Circuit {
+    let out = exec::<_, WP, _>(&Slip10Circuit {
         seed: hex(seed),
         path,
         with_pubkeys: true,
-    })
+    }, ExecOptions::new())
     .u8;
     assert_eq!(out.len(), 64 * nodes.len());
     for (i, (key, pubkey)) in nodes.iter().enumerate() {
@@ -212,7 +213,7 @@ fn test_solana_pubkey_independent_expected_value() {
     // independent implementation (Python hashlib HMAC-SHA512 + affine Edwards arithmetic,
     // itself checked against RFC 8032 TEST 1).
     let seed: Vec<u8> = (0..64u8).collect();
-    let out = exec::<_, WP>(&SolanaCircuit { seed }).u8;
+    let out = exec::<_, WP, _>(&SolanaCircuit { seed }, ExecOptions::new()).u8;
     assert_eq!(
         to_hex(&out),
         "ce5e3294aa964334c284d29d498bb3eb5595214ed3b0c96afee36547a938349c"
@@ -255,10 +256,10 @@ fn test_solana_pubkey_wallet_core_vector() {
     // mnemonic at Solana's default derivation path m/44'/501'/0' gives the address
     // 2bUBiBNZyD29gP1oV6de7nxowMLoDBtopMMTGgMvjG5m, whose Base58 decoding is the public key
     // below. The whole pipeline — BIP-39 seed, SLIP-0010 chain, Ed25519 key — runs in-circuit.
-    let out = exec::<_, WP>(&MnemonicToPubkeyCircuit {
+    let out = exec::<_, WP, _>(&MnemonicToPubkeyCircuit {
         mnemonic: "shoot island position soft burden budget tooth cruel issue economy destroy above",
         path: vec![44, 501, 0],
-    })
+    }, ExecOptions::new())
     .u8;
     assert_eq!(
         to_hex(&out),
@@ -309,10 +310,10 @@ fn test_solana_pubkey_four_level_path_external_vector() {
         ),
     ];
     for (account, expected) in vectors {
-        let out = exec::<_, WP>(&MnemonicToSolanaCircuit {
+        let out = exec::<_, WP, _>(&MnemonicToSolanaCircuit {
             mnemonic: "neither lonely flavor argue grass remind eye tag avocado spot unusual intact",
             account,
-        })
+        }, ExecOptions::new())
         .u8;
         assert_eq!(to_hex(&out), expected, "account {account}");
     }
