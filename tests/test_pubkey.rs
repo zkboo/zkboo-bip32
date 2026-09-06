@@ -9,13 +9,13 @@ use zkboo::{
     circuit::Circuit,
     executor::{OwnedFlexibleWordPool, exec},
 };
-use zkboo_bip32::{be_bytes_to_word, public_key, public_key_advice};
+use zkboo_bip32::{be_bytes_to_word, public_key};
 use zkboo_ecc::weierstrass::PointFrontendIO;
 use zkboo::executor::ExecOptions;
 
 /// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
 ///
-/// The prover's view — advice is computed from the witness it already holds.
+/// The prover's view — the comb mirrors this on the host to find the slopes it needs.
 fn be_words(bytes: &[u8]) -> CompositeWord<u64, 4> {
     let mut limbs = [0u64; 4];
     for (i, chunk) in bytes.chunks(8).enumerate() {
@@ -39,11 +39,15 @@ impl Circuit for PubKeyCircuit {
             .map(|&b| frontend.input(b))
             .collect::<Vec<_>>();
         let scalar = be_bytes_to_word(&bytes);
-        let mut asserts = Assertions::new();
-        let advice = public_key_advice(be_words(&self.private_key));
-        let q = public_key(frontend, scalar, &advice, &mut asserts);
-        frontend.point_output_affine(q); // outputs affine x then y (4 u64 limbs each)
-        asserts.output(frontend);
+        Assertions::scope(frontend, |asserts| {
+            let q = public_key(
+                frontend,
+                scalar,
+                Some(be_words(&self.private_key)),
+                asserts,
+            );
+            frontend.point_output_affine(q); // outputs affine x then y (4 u64 limbs each)
+        });
     }
 }
 

@@ -21,4 +21,7 @@ zkboo-ripemd160 = { version = "1.2.0" }
 
 [dev-dependencies]
 zkboo = { version = "1.2.0", features = ["u32", "u64"] }
+zkboo-circuit-hash = "1.2.0"
+blake3 = "1.8.3"
+zeroize = "1.8.2"
 bitcoin = "0.32"

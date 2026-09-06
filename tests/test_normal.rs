@@ -10,12 +10,12 @@ use zkboo::{
     circuit::Circuit,
     executor::{OwnedFlexibleWordPool, exec},
 };
-use zkboo_bip32::{normal_child_key, public_key_advice};
+use zkboo_bip32::normal_child_key;
 use zkboo::executor::ExecOptions;
 
 /// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
 ///
-/// The prover's view — advice is computed from the witness it already holds.
+/// The prover's view — the comb mirrors this on the host to find the slopes it needs.
 fn be_words(bytes: &[u8]) -> CompositeWord<u64, 4> {
     let mut limbs = [0u64; 4];
     for (i, chunk) in bytes.chunks(8).enumerate() {
@@ -45,21 +45,20 @@ impl Circuit for NormalChildCircuit {
             .iter()
             .map(|&b| frontend.input(b))
             .collect::<Vec<_>>();
-        let mut asserts = Assertions::new();
-        let advice = public_key_advice(be_words(&self.parent_priv));
-        let (child_priv, child_chain_code) = normal_child_key(
-            frontend,
-            chain_code,
-            parent_priv,
-            self.index,
-            &advice,
-            &mut asserts,
-        );
-        frontend.output(child_priv);
-        child_chain_code
-            .into_iter()
-            .for_each(|w| frontend.output(w));
-        asserts.output(frontend);
+        Assertions::scope(frontend, |asserts| {
+            let (child_priv, child_chain_code) = normal_child_key(
+                frontend,
+                chain_code,
+                parent_priv,
+                Some(be_words(&self.parent_priv)),
+                self.index,
+                asserts,
+            );
+            frontend.output(child_priv);
+            child_chain_code
+                .into_iter()
+                .for_each(|w| frontend.output(w));
+        });
     }
 }
 
