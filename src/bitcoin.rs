@@ -14,7 +14,7 @@ use zkboo_ecc::weierstrass::{
     PointBooleanWordRefSelector, WindowTables,
 };
 use zkboo_ecc::secp256k1::Secp256k1PM;
-use zkboo_modular::montgomery::Montgomery;
+use zkboo_modular::montgomery::{Montgomery, MontgomeryFrontendIO};
 use zkboo_ripemd160::ripemd160;
 use zkboo_sha2::sha256bytes;
 
@@ -236,10 +236,9 @@ impl<T: WindowTables<u64, 4, Secp256k1PM>> zkboo::circuit::Circuit for OutputKey
                 assertions,
             );
             // Computed rather than asserted: this pass exists to produce what the circuit asserts.
-            // The inner Montgomery values, which is what the assertion compares against.
             let (x, y, _, _) = q.to_affine().destructure();
-            fe.output(x.into_inner());
-            fe.output(y.into_inner());
+            fe.montgomery_output_inner(x);
+            fe.montgomery_output_inner(y);
         });
     }
 }

@@ -13,7 +13,7 @@ use zkboo::word::CompositeWord;
 use zkboo_ecc::edwards::{
     ComputedWindowTables, Point, PointRef, WindowTables, mul_secret_scalar,
 };
-use zkboo_modular::montgomery::Montgomery;
+use zkboo_modular::montgomery::{Montgomery, MontgomeryFrontendIO};
 use zkboo_hmac::hmac;
 use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};
 
@@ -253,8 +253,6 @@ impl<T: WindowTables> Circuit for SolanaAffine<'_, T> {
 /// passes above exist precisely to produce what the circuit will later assert.
 fn output_affine<B: Backend>(fe: &Frontend<B>, point: PointRef<B>) {
     let (x, y) = point.to_affine();
-    // The inner Montgomery value, not the canonical residue: this is what the assertion compares
-    // against, and what [`PointRef::to_affine_advised`] takes back as advice.
-    fe.output(x.into_inner());
-    fe.output(y.into_inner());
+    fe.montgomery_output_inner(x);
+    fe.montgomery_output_inner(y);
 }
