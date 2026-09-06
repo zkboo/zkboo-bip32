@@ -141,8 +141,8 @@ pub fn normal_child_key_with_tables<B: Backend>(
         tables,
         assertions,
     );
-    let prefix = y.value().lsb().select_const_const(0x03u8, 0x02u8);
-    let x_bytes = word_to_be_bytes(x.value());
+    let prefix = y.canonical().lsb().select_const_const(0x03u8, 0x02u8);
+    let x_bytes = word_to_be_bytes(x.canonical());
 
     // data = compressed_pubkey (33) || ser32(index) (4).
     let allocator = frontend.allocator();

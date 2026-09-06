@@ -45,8 +45,8 @@ pub fn ethereum_address_with_tables<B: Backend>(
     );
 
     // Uncompressed public key, no 0x04 prefix: x_be (32) || y_be (32).
-    let mut pubkey_bytes = word_to_be_bytes(x.value());
-    pubkey_bytes.extend(word_to_be_bytes(y.value()));
+    let mut pubkey_bytes = word_to_be_bytes(x.canonical());
+    pubkey_bytes.extend(word_to_be_bytes(y.canonical()));
 
     let digest = keccak256(frontend.allocator(), pubkey_bytes);
 
