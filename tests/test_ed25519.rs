@@ -9,13 +9,13 @@ use zkboo::{
     backend::{Backend, Frontend},
     circuit::{Assertions, Circuit},
     executor::{OwnedFlexibleWordPool, exec},
-    word::CompositeWord,
 };
 use zkboo_bip32::{
     ed25519_public_key, ed25519_public_key_affine, ed25519_public_key_with_tables,
     slip10_ed25519_child, slip10_ed25519_master, solana_pubkey, solana_pubkey_affine,
 };
 use zkboo_ecc::edwards::{ComputedWindowTables, Point};
+use zkboo_modular::montgomery::Montgomery;
 use zkboo::executor::ExecOptions;
 
 type WP = OwnedFlexibleWordPool<usize>;
@@ -31,7 +31,7 @@ fn to_hex(bytes: &[u8]) -> String {
 }
 
 /// The affine public key the compression asserts, computed on the host.
-fn affine_of(secret_key: &[u8]) -> [CompositeWord<u64, 4>; 2] {
+fn affine_of(secret_key: &[u8]) -> [Montgomery<u64, 4>; 2] {
     let key: [u8; 32] = secret_key.try_into().expect("32 secret-key bytes");
     let mut tables = ComputedWindowTables::new(Point::base(), 5);
     return ed25519_public_key_affine(key, &mut tables, ExecOptions::new());
@@ -276,7 +276,7 @@ struct MnemonicToPubkeyCircuit {
     path: Vec<u32>,
     /// The affine public key the compression asserts, or `None` to output the leaf secret key
     /// instead: the pass that finds it is the pass that lets the host compute the advice.
-    advice: Option<[CompositeWord<u64, 4>; 2]>,
+    advice: Option<[Montgomery<u64, 4>; 2]>,
 }
 
 impl Circuit for MnemonicToPubkeyCircuit {
@@ -342,7 +342,7 @@ struct MnemonicToSolanaCircuit {
     mnemonic: &'static str,
     account: u32,
     /// The affine public key the compression asserts, or `None` to output the BIP-39 seed instead.
-    advice: Option<[CompositeWord<u64, 4>; 2]>,
+    advice: Option<[Montgomery<u64, 4>; 2]>,
 }
 
 impl Circuit for MnemonicToSolanaCircuit {

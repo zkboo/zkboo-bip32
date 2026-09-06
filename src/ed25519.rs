@@ -13,6 +13,7 @@ use zkboo::word::CompositeWord;
 use zkboo_ecc::edwards::{
     ComputedWindowTables, Point, PointRef, WindowTables, mul_secret_scalar,
 };
+use zkboo_modular::montgomery::Montgomery;
 use zkboo_hmac::hmac;
 use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};
 
@@ -77,7 +78,7 @@ pub fn slip10_ed25519_child<B: Backend>(
 pub fn ed25519_public_key<B: Backend>(
     frontend: &Frontend<B>,
     secret_key: &[WordRef<B, u8>; 32],
-    advice: Option<[CompositeWord<u64, 4>; 2]>,
+    advice: Option<[Montgomery<u64, 4>; 2]>,
     assertions: &mut Assertions<B>,
 ) -> [WordRef<B, u8>; 32] {
     let mut tables = ComputedWindowTables::new(Point::base(), WINDOW_BITS);
@@ -89,7 +90,7 @@ pub fn ed25519_public_key<B: Backend>(
 pub fn ed25519_public_key_with_tables<B: Backend>(
     frontend: &Frontend<B>,
     secret_key: &[WordRef<B, u8>; 32],
-    advice: Option<[CompositeWord<u64, 4>; 2]>,
+    advice: Option<[Montgomery<u64, 4>; 2]>,
     tables: &mut impl WindowTables,
     assertions: &mut Assertions<B>,
 ) -> [WordRef<B, u8>; 32] {
@@ -125,7 +126,7 @@ pub fn solana_pubkey<B: Backend>(
     frontend: &Frontend<B>,
     seed: Vec<WordRef<B, u8>>,
     account: u32,
-    advice: Option<[CompositeWord<u64, 4>; 2]>,
+    advice: Option<[Montgomery<u64, 4>; 2]>,
     assertions: &mut Assertions<B>,
 ) -> [WordRef<B, u8>; 32] {
     let mut tables = ComputedWindowTables::new(Point::base(), WINDOW_BITS);
@@ -137,7 +138,7 @@ pub fn solana_pubkey_with_tables<B: Backend>(
     frontend: &Frontend<B>,
     seed: Vec<WordRef<B, u8>>,
     account: u32,
-    advice: Option<[CompositeWord<u64, 4>; 2]>,
+    advice: Option<[Montgomery<u64, 4>; 2]>,
     tables: &mut impl WindowTables,
     assertions: &mut Assertions<B>,
 ) -> [WordRef<B, u8>; 32] {
@@ -169,7 +170,7 @@ pub fn ed25519_public_key_affine<T: WindowTables, BH: BackendHook>(
     secret_key: [u8; 32],
     tables: &mut T,
     options: ExecOptions<BH>,
-) -> [CompositeWord<u64, 4>; 2] {
+) -> [Montgomery<u64, 4>; 2] {
     return affine_of(
         &Ed25519Affine {
             secret_key,
@@ -188,7 +189,7 @@ pub fn solana_pubkey_affine<T: WindowTables, BH: BackendHook>(
     account: u32,
     tables: &mut T,
     options: ExecOptions<BH>,
-) -> [CompositeWord<u64, 4>; 2] {
+) -> [Montgomery<u64, 4>; 2] {
     return affine_of(
         &SolanaAffine {
             seed,
@@ -203,13 +204,17 @@ pub fn solana_pubkey_affine<T: WindowTables, BH: BackendHook>(
 fn affine_of<C: Circuit, BH: BackendHook>(
     circuit: &C,
     options: ExecOptions<BH>,
-) -> [CompositeWord<u64, 4>; 2] {
+) -> [Montgomery<u64, 4>; 2] {
     let words = exec::<_, OwnedFlexibleWordPool<usize>, _>(circuit, options);
     let limbs = words.as_vec::<u64>();
     assert_eq!(limbs.len(), 8, "two affine coordinates of four limbs each");
     return [
-        CompositeWord::from_le_words([limbs[0], limbs[1], limbs[2], limbs[3]]),
-        CompositeWord::from_le_words([limbs[4], limbs[5], limbs[6], limbs[7]]),
+        Montgomery::from_raw(CompositeWord::from_le_words([
+            limbs[0], limbs[1], limbs[2], limbs[3],
+        ])),
+        Montgomery::from_raw(CompositeWord::from_le_words([
+            limbs[4], limbs[5], limbs[6], limbs[7],
+        ])),
     ];
 }
 

@@ -14,6 +14,7 @@ use zkboo_ecc::weierstrass::{
     PointBooleanWordRefSelector, WindowTables,
 };
 use zkboo_ecc::secp256k1::Secp256k1PM;
+use zkboo_modular::montgomery::Montgomery;
 use zkboo_ripemd160::ripemd160;
 use zkboo_sha2::sha256bytes;
 
@@ -50,10 +51,10 @@ pub fn compressed_pubkey<B: Backend>(
 /// [`public_key_affine`](crate::public_key_affine) returns them — no conversion needed.
 pub fn compressed_pubkey_affine<B: Backend>(point: AffinePoint<B>) -> [WordRef<B, u8>; 33] {
     let (x, y) = point;
-    let parity_byte = y.value().lsb().into() ^ 0x02u8;
+    let parity_byte = y.canonical().lsb().into() ^ 0x02u8;
     let mut bytes: Vec<WordRef<B, u8>> = Vec::with_capacity(33);
     bytes.push(parity_byte);
-    bytes.extend(word_to_be_bytes(x.value()));
+    bytes.extend(word_to_be_bytes(x.canonical()));
     return bytes.try_into().ok().expect("33 pubkey bytes");
 }
 
@@ -162,7 +163,7 @@ pub struct TaprootWitness {
     /// The scalar the second comb multiplies by, `H_TapTweak(x(P))`.
     tweak_scalar: CompositeWord<u64, 4>,
     /// The affine output key `Q`, which the final conversion asserts rather than computes.
-    output_key: [CompositeWord<u64, 4>; 2],
+    output_key: [Montgomery<u64, 4>; 2],
 }
 
 impl TaprootWitness {
@@ -196,8 +197,12 @@ impl TaprootWitness {
         return Self {
             tweak_scalar,
             output_key: [
-                CompositeWord::from_le_words([limbs[0], limbs[1], limbs[2], limbs[3]]),
-                CompositeWord::from_le_words([limbs[4], limbs[5], limbs[6], limbs[7]]),
+                Montgomery::from_raw(CompositeWord::from_le_words([
+                    limbs[0], limbs[1], limbs[2], limbs[3],
+                ])),
+                Montgomery::from_raw(CompositeWord::from_le_words([
+                    limbs[4], limbs[5], limbs[6], limbs[7],
+                ])),
             ],
         };
     }
@@ -260,9 +265,9 @@ impl<T: WindowTables<u64, 4, Secp256k1PM>> zkboo::circuit::Circuit for TweakScal
                 assertions,
             );
             let p = PointRef::from_affine(px, py, Secp256k1PM);
-            let y_is_odd = p.coords()[1].clone().value().lsb();
+            let y_is_odd = p.coords()[1].clone().canonical().lsb();
             let p_even = y_is_odd.point_select(-p.clone(), p);
-            let internal_x = word_to_be_bytes(p_even.coords()[0].clone().value());
+            let internal_x = word_to_be_bytes(p_even.coords()[0].clone().canonical());
             let tweak = tagged_hash(fe.allocator(), &TAP_TWEAK_TAG_HASH, internal_x);
             fe.output(be_bytes_to_word(&tweak));
         });
@@ -312,7 +317,7 @@ pub fn taproot_output_key_with_tables<B: Backend>(
     let (x, _, _, _) = q
         .to_affine_advised(frontend, witness.map(|w| w.output_key), assertions)
         .destructure();
-    return word_to_be_bytes(x.value())
+    return word_to_be_bytes(x.canonical())
         .try_into()
         .ok()
         .expect("32 output-key bytes");
@@ -337,9 +342,9 @@ fn taproot_output_point<B: Backend>(
         assertions,
     );
     let p = PointRef::from_affine(px, py, Secp256k1PM);
-    let y_is_odd = p.coords()[1].clone().value().lsb();
+    let y_is_odd = p.coords()[1].clone().canonical().lsb();
     let p_even = y_is_odd.point_select(-p.clone(), p);
-    let internal_x = word_to_be_bytes(p_even.coords()[0].clone().value());
+    let internal_x = word_to_be_bytes(p_even.coords()[0].clone().canonical());
     // Tweak t = H_TapTweak(x(P)); output key Q = P + t·G.
     let tweak = tagged_hash(allocator, &TAP_TWEAK_TAG_HASH, internal_x);
     let tweak_scalar = be_bytes_to_word(&tweak);

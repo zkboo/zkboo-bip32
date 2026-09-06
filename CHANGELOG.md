@@ -21,6 +21,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   Taproot goes from 892,733 AND messages to 800,448 and Solana from 1,212,358 to 1,118,276, both a little below where they stood before the hint gate went.
 - Ed25519 derivations take an assertion accumulator, having something to assert for the first time.
 
+- The affine advice is `Montgomery` rather than a bare word, in `TaprootWitness`, `ed25519_public_key_affine`, `solana_pubkey_affine` and the derivations that consume them.
+
 ### Removed
 
 - `PublicKeyAdvice`, `public_key_advice`, `public_key_advice_with_tables` and `public_key_advice_shape`.
