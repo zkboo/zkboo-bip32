@@ -16,16 +16,17 @@ mod util;
 
 pub use address::{ethereum_address, ethereum_address_with_tables};
 pub use bitcoin::{
-    TAP_TWEAK_TAG_HASH, compressed_pubkey, compressed_pubkey_affine, hash160, p2sh_p2wpkh_payload,
-    p2sh_p2wpkh_payload_with_tables, pubkey_hash160, pubkey_hash160_with_tables, tagged_hash,
-    taproot_output_key, taproot_output_key_with_tables, taproot_tweak_scalar,
+    TAP_TWEAK_TAG_HASH, TaprootWitness, compressed_pubkey, compressed_pubkey_affine, hash160,
+    p2sh_p2wpkh_payload, p2sh_p2wpkh_payload_with_tables, pubkey_hash160,
+    pubkey_hash160_with_tables, tagged_hash, taproot_output_key, taproot_output_key_with_tables,
 };
 pub use child::{
     HARDENED_OFFSET, hardened_child_key, normal_child_key, normal_child_key_with_tables,
 };
 pub use ed25519::{
-    SLIP10_ED25519_HMAC_KEY, SOLANA_COIN_TYPE, ed25519_public_key, ed25519_public_key_with_tables,
-    slip10_ed25519_child, slip10_ed25519_master, solana_pubkey, solana_pubkey_with_tables,
+    SLIP10_ED25519_HMAC_KEY, SOLANA_COIN_TYPE, ed25519_public_key, ed25519_public_key_affine,
+    ed25519_public_key_with_tables, slip10_ed25519_child, slip10_ed25519_master, solana_pubkey,
+    solana_pubkey_affine, solana_pubkey_with_tables,
 };
 pub use master::{MASTER_KEY_HMAC_KEY, master_key};
 pub use pubkey::{

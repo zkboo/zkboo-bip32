@@ -13,7 +13,12 @@ use zkboo::backend::{Backend, Frontend};
 use zkboo::circuit::{Assertions, Circuit};
 use zkboo::crypto::Hasher;
 use zkboo::word::CompositeWord;
-use zkboo_bip32::{be_bytes_to_word, ethereum_address, public_key, taproot_output_key};
+use zkboo::executor::ExecOptions;
+use zkboo_bip32::{
+    TaprootWitness, be_bytes_to_word, ethereum_address, public_key, taproot_output_key,
+};
+use zkboo_ecc::secp256k1::Secp256k1PM;
+use zkboo_ecc::weierstrass::{ComputedWindowTables, Curve, DEFAULT_COMB_WINDOW_BITS};
 use zkboo_circuit_hash::hash_circuit;
 use zkboo_ecc::weierstrass::PointFrontendIO;
 
@@ -55,8 +60,8 @@ struct Statement {
     private_key: [u8; 32],
     /// The scalar for the comb to mirror, and `None` in the verifier's view.
     private_key_value: Option<CompositeWord<u64, 4>>,
-    /// The Taproot tweak scalar to mirror, and `None` in the verifier's view.
-    tweak_scalar_value: Option<CompositeWord<u64, 4>>,
+    /// The Taproot host values to mirror, and `None` in the verifier's view.
+    taproot_witness: Option<TaprootWitness>,
     kind: Kind,
 }
 
@@ -81,8 +86,12 @@ impl Statement {
         return Self {
             private_key,
             private_key_value: Some(key),
-            // Any value at all: this test compares circuits, which never read an input's value.
-            tweak_scalar_value: Some(key),
+            // Any values at all: this test compares circuits, which never read an input's value.
+            taproot_witness: Some(TaprootWitness::compute(
+                key,
+                &mut ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS),
+                ExecOptions::new(),
+            )),
             kind,
         };
     }
@@ -91,7 +100,7 @@ impl Statement {
         return Self {
             private_key: [0u8; 32],
             private_key_value: None,
-            tweak_scalar_value: None,
+            taproot_witness: None,
             kind,
         };
     }
@@ -116,7 +125,7 @@ impl Circuit for Statement {
                     fe,
                     scalar,
                     self.private_key_value,
-                    self.tweak_scalar_value,
+                    self.taproot_witness,
                     asserts,
                 )
                 .into_iter()

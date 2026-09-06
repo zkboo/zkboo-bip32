@@ -152,27 +152,91 @@ pub fn tagged_hash<B: Backend>(
     return sha256bytes(allocator, input);
 }
 
-/// The tweak scalar a Taproot derivation's second comb multiplies by, computed on the host.
+/// The host values a Taproot derivation's circuit takes as advice.
 ///
-/// It is `H_TapTweak(x(P))` for the internal key `P = d·G`, which the circuit derives from `d` and
-/// the host therefore cannot read off the witness: this mirrors the derivation in cleartext, under
-/// the caller's execution options, so that a caller servicing an operating system between backend
-/// operations keeps doing so throughout.
-pub fn taproot_tweak_scalar<T: WindowTables<u64, 4, Secp256k1PM>, BH: BackendHook>(
+/// Both are public quantities derived from the private key: the tweak scalar is the tagged hash of
+/// the internal key's x-coordinate, and the output key is the statement's own result. Neither
+/// determines the private key, unlike the comb slopes this replaced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaprootWitness {
+    /// The scalar the second comb multiplies by, `H_TapTweak(x(P))`.
+    tweak_scalar: CompositeWord<u64, 4>,
+    /// The affine output key `Q`, which the final conversion asserts rather than computes.
+    output_key: [CompositeWord<u64, 4>; 2],
+}
+
+impl TaprootWitness {
+    /// Mirrors the derivation on the host, in two cleartext passes over the caller's table source
+    /// and under the caller's execution options.
+    ///
+    /// Two passes rather than one because the second comb's scalar is derived inside the circuit:
+    /// the first pass finds it, and only then can the second compute the output key.
+    pub fn compute<T: WindowTables<u64, 4, Secp256k1PM>, BH: BackendHook>(
+        private_key: CompositeWord<u64, 4>,
+        tables: &mut T,
+        options: ExecOptions<BH>,
+    ) -> Self {
+        let tweak_scalar = read_word(exec::<_, OwnedFlexibleWordPool<usize>, _>(
+            &TweakScalar {
+                private_key,
+                tables: RefCell::new(tables),
+            },
+            options.clone(),
+        ));
+        let coords = exec::<_, OwnedFlexibleWordPool<usize>, _>(
+            &OutputKey {
+                private_key,
+                tweak_scalar,
+                tables: RefCell::new(tables),
+            },
+            options,
+        );
+        let limbs = coords.as_vec::<u64>();
+        assert_eq!(limbs.len(), 8, "two affine coordinates of four limbs each");
+        return Self {
+            tweak_scalar,
+            output_key: [
+                CompositeWord::from_le_words([limbs[0], limbs[1], limbs[2], limbs[3]]),
+                CompositeWord::from_le_words([limbs[4], limbs[5], limbs[6], limbs[7]]),
+            ],
+        };
+    }
+}
+
+/// Reads a single four-limb word back from a cleartext pass's output.
+fn read_word(words: zkboo::word::Words) -> CompositeWord<u64, 4> {
+    let limbs = words.as_vec::<u64>();
+    assert_eq!(limbs.len(), 4, "a single four-limb word");
+    return CompositeWord::from_le_words([limbs[0], limbs[1], limbs[2], limbs[3]]);
+}
+
+/// The cleartext pass that finds the output key, once the tweak scalar is known.
+struct OutputKey<'a, T: WindowTables<u64, 4, Secp256k1PM>> {
     private_key: CompositeWord<u64, 4>,
-    tables: &mut T,
-    options: ExecOptions<BH>,
-) -> CompositeWord<u64, 4> {
-    let scalar = exec::<_, OwnedFlexibleWordPool<usize>, _>(
-        &TweakScalar {
-            private_key,
-            tables: RefCell::new(tables),
-        },
-        options,
-    );
-    let limbs = scalar.as_vec::<u64>();
-    assert_eq!(limbs.len(), 4, "the tweak scalar is four 64-bit limbs");
-    return CompositeWord::<u64, 4>::from_le_words([limbs[0], limbs[1], limbs[2], limbs[3]]);
+    tweak_scalar: CompositeWord<u64, 4>,
+    tables: RefCell<&'a mut T>,
+}
+
+impl<T: WindowTables<u64, 4, Secp256k1PM>> zkboo::circuit::Circuit for OutputKey<'_, T> {
+    fn exec<B: Backend>(&self, fe: &Frontend<B>) {
+        Assertions::scope(fe, |assertions| {
+            let mut tables = self.tables.borrow_mut();
+            let private_key = fe.input(self.private_key);
+            let q = taproot_output_point(
+                fe,
+                private_key,
+                Some(self.private_key),
+                Some(self.tweak_scalar),
+                &mut **tables,
+                assertions,
+            );
+            // Computed rather than asserted: this pass exists to produce what the circuit asserts.
+            // The inner Montgomery values, which is what the assertion compares against.
+            let (x, y, _, _) = q.to_affine().destructure();
+            fe.output(x.into_inner());
+            fe.output(y.into_inner());
+        });
+    }
 }
 
 /// The cleartext pass that finds the tweak scalar: everything [`taproot_output_key`] does up to the
@@ -211,7 +275,7 @@ pub fn taproot_output_key<B: Backend>(
     frontend: &Frontend<B>,
     private_key: WordRef<B, u64, 4>,
     private_key_value: Option<CompositeWord<u64, 4>>,
-    tweak_scalar_value: Option<CompositeWord<u64, 4>>,
+    witness: Option<TaprootWitness>,
     assertions: &mut Assertions<B>,
 ) -> [WordRef<B, u8>; 32] {
     let mut tables = ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
@@ -219,7 +283,7 @@ pub fn taproot_output_key<B: Backend>(
         frontend,
         private_key,
         private_key_value,
-        tweak_scalar_value,
+        witness,
         &mut tables,
         assertions,
     );
@@ -230,10 +294,39 @@ pub fn taproot_output_key_with_tables<B: Backend>(
     frontend: &Frontend<B>,
     private_key: WordRef<B, u64, 4>,
     private_key_value: Option<CompositeWord<u64, 4>>,
-    tweak_scalar_value: Option<CompositeWord<u64, 4>>,
+    witness: Option<TaprootWitness>,
     tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
     assertions: &mut Assertions<B>,
 ) -> [WordRef<B, u8>; 32] {
+    let q = taproot_output_point(
+        frontend,
+        private_key,
+        private_key_value,
+        witness.map(|w| w.tweak_scalar),
+        tables,
+        assertions,
+    );
+    // The output key's affine coordinates are asserted, not computed: a modular inversion in
+    // circuit costs some ninety thousand AND messages, and checking a pair of coordinates costs
+    // two field multiplications.
+    let (x, _, _, _) = q
+        .to_affine_advised(frontend, witness.map(|w| w.output_key), assertions)
+        .destructure();
+    return word_to_be_bytes(x.value())
+        .try_into()
+        .ok()
+        .expect("32 output-key bytes");
+}
+
+/// The Taproot output point `Q = lift_x(P) + H_TapTweak(x(P))·G`, before conversion to affine.
+fn taproot_output_point<B: Backend>(
+    frontend: &Frontend<B>,
+    private_key: WordRef<B, u64, 4>,
+    private_key_value: Option<CompositeWord<u64, 4>>,
+    tweak_scalar_value: Option<CompositeWord<u64, 4>>,
+    tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
+    assertions: &mut Assertions<B>,
+) -> PointRef<B, u64, 4, Secp256k1PM> {
     let allocator = frontend.allocator();
     // Internal key P = d·G, normalized to even y (BIP-340 x-only lift).
     let (px, py) = public_key_affine_with_tables(
@@ -257,10 +350,5 @@ pub fn taproot_output_key_with_tables<B: Backend>(
         tables,
         assertions,
     );
-    let q = p_even + PointRef::from_affine(tx, ty, Secp256k1PM);
-    let (x, _, _, _) = q.to_affine().destructure();
-    return word_to_be_bytes(x.value())
-        .try_into()
-        .ok()
-        .expect("32 output-key bytes");
+    return p_even + PointRef::from_affine(tx, ty, Secp256k1PM);
 }

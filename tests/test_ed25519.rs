@@ -7,12 +7,13 @@
 
 use zkboo::{
     backend::{Backend, Frontend},
-    circuit::Circuit,
+    circuit::{Assertions, Circuit},
     executor::{OwnedFlexibleWordPool, exec},
+    word::CompositeWord,
 };
 use zkboo_bip32::{
-    ed25519_public_key, ed25519_public_key_with_tables, slip10_ed25519_child,
-    slip10_ed25519_master, solana_pubkey,
+    ed25519_public_key, ed25519_public_key_affine, ed25519_public_key_with_tables,
+    slip10_ed25519_child, slip10_ed25519_master, solana_pubkey, solana_pubkey_affine,
 };
 use zkboo_ecc::edwards::{ComputedWindowTables, Point};
 use zkboo::executor::ExecOptions;
@@ -29,6 +30,13 @@ fn to_hex(bytes: &[u8]) -> String {
     return bytes.iter().map(|b| format!("{b:02x}")).collect();
 }
 
+/// The affine public key the compression asserts, computed on the host.
+fn affine_of(secret_key: &[u8]) -> [CompositeWord<u64, 4>; 2] {
+    let key: [u8; 32] = secret_key.try_into().expect("32 secret-key bytes");
+    let mut tables = ComputedWindowTables::new(Point::base(), 5);
+    return ed25519_public_key_affine(key, &mut tables, ExecOptions::new());
+}
+
 /// Derives the RFC 8032 public key of a fixed secret key.
 struct PubkeyCircuit {
     secret_key: Vec<u8>,
@@ -36,9 +44,12 @@ struct PubkeyCircuit {
 
 impl Circuit for PubkeyCircuit {
     fn exec<B: Backend>(&self, frontend: &Frontend<B>) {
-        let key: [_; 32] = core::array::from_fn(|i| frontend.input(self.secret_key[i]));
-        let pubkey = ed25519_public_key(frontend, &key);
-        pubkey.into_iter().for_each(|w| frontend.output(w));
+        Assertions::scope(frontend, |asserts| {
+            let key: [_; 32] = core::array::from_fn(|i| frontend.input(self.secret_key[i]));
+            let advice = Some(affine_of(&self.secret_key));
+            let pubkey = ed25519_public_key(frontend, &key, advice, asserts);
+            pubkey.into_iter().for_each(|w| frontend.output(w));
+        });
     }
 }
 
@@ -48,6 +59,9 @@ struct Slip10Circuit {
     seed: Vec<u8>,
     path: Vec<u32>,
     with_pubkeys: bool,
+    /// The private key at each node, in order, when public keys are wanted: the host supplies what
+    /// each compression asserts, and only a first pass over this chain can tell it what they are.
+    node_keys: Vec<Vec<u8>>,
 }
 
 impl Circuit for Slip10Circuit {
@@ -65,14 +79,17 @@ impl Circuit for Slip10Circuit {
             (key, chain) = slip10_ed25519_child(allocator.clone(), &key, &chain, index);
             nodes.push(key.clone());
         }
-        for key in nodes {
-            key.iter().for_each(|w| frontend.output(w.clone()));
-            if self.with_pubkeys {
-                ed25519_public_key_with_tables(frontend, &key, &mut tables)
-                    .into_iter()
-                    .for_each(|w| frontend.output(w));
+        Assertions::scope(frontend, |asserts| {
+            for (node, key) in nodes.into_iter().enumerate() {
+                key.iter().for_each(|w| frontend.output(w.clone()));
+                if self.with_pubkeys {
+                    let advice = Some(affine_of(&self.node_keys[node]));
+                    ed25519_public_key_with_tables(frontend, &key, advice, &mut tables, asserts)
+                        .into_iter()
+                        .for_each(|w| frontend.output(w));
+                }
             }
-        }
+        });
     }
 }
 
@@ -83,13 +100,22 @@ struct SolanaCircuit {
 
 impl Circuit for SolanaCircuit {
     fn exec<B: Backend>(&self, frontend: &Frontend<B>) {
-        let seed = self
-            .seed
-            .iter()
-            .map(|&b| frontend.input(b))
-            .collect::<Vec<_>>();
-        let pubkey = solana_pubkey(frontend, seed, 0);
-        pubkey.into_iter().for_each(|w| frontend.output(w));
+        Assertions::scope(frontend, |asserts| {
+            let seed = self
+                .seed
+                .iter()
+                .map(|&b| frontend.input(b))
+                .collect::<Vec<_>>();
+            let mut tables = ComputedWindowTables::new(Point::base(), 5);
+            let advice = Some(solana_pubkey_affine(
+                self.seed.clone(),
+                0,
+                &mut tables,
+                ExecOptions::new(),
+            ));
+            let pubkey = solana_pubkey(frontend, seed, 0, advice, asserts);
+            pubkey.into_iter().for_each(|w| frontend.output(w));
+        });
     }
 }
 
@@ -115,20 +141,41 @@ fn test_ed25519_public_key_rfc8032() {
             secret_key: hex(secret),
         }, ExecOptions::new())
         .u8;
-        assert_eq!(to_hex(&out), expected);
+        assert_eq!(out.len(), 33, "expected a 32-byte key and an assertion flag");
+        assert_eq!(out[32], 1, "the compression's assertions did not hold");
+        assert_eq!(to_hex(&out[..32]), expected);
     }
 }
 
 /// Checks a SLIP-0010 chain against published (private key, public key) pairs per node; the
 /// published public keys carry SLIP-0010's leading 0x00, which is stripped.
 fn check_slip10_chain(seed: &str, path: Vec<u32>, nodes: &[(&str, &str)]) {
+    // A first pass for the node private keys, so the host can compute the affine public key each
+    // compression asserts; a second pass for the statement itself.
+    let keys = exec::<_, WP, _>(&Slip10Circuit {
+        seed: hex(seed),
+        path: path.clone(),
+        with_pubkeys: false,
+        node_keys: Vec::new(),
+    }, ExecOptions::new())
+    .u8;
+    let node_keys: Vec<Vec<u8>> = keys[..32 * nodes.len()]
+        .chunks(32)
+        .map(<[u8]>::to_vec)
+        .collect();
     let out = exec::<_, WP, _>(&Slip10Circuit {
         seed: hex(seed),
         path,
         with_pubkeys: true,
+        node_keys,
     }, ExecOptions::new())
     .u8;
-    assert_eq!(out.len(), 64 * nodes.len());
+    assert_eq!(out.len(), 64 * nodes.len() + 1);
+    assert_eq!(
+        out[64 * nodes.len()],
+        1,
+        "the compressions' assertions did not hold"
+    );
     for (i, (key, pubkey)) in nodes.iter().enumerate() {
         assert_eq!(to_hex(&out[64 * i..64 * i + 32]), *key, "node {i} key");
         assert_eq!(
@@ -214,8 +261,10 @@ fn test_solana_pubkey_independent_expected_value() {
     // itself checked against RFC 8032 TEST 1).
     let seed: Vec<u8> = (0..64u8).collect();
     let out = exec::<_, WP, _>(&SolanaCircuit { seed }, ExecOptions::new()).u8;
+    assert_eq!(out.len(), 33, "expected a 32-byte key and an assertion flag");
+    assert_eq!(out[32], 1, "the compression's assertions did not hold");
     assert_eq!(
-        to_hex(&out),
+        to_hex(&out[..32]),
         "ce5e3294aa964334c284d29d498bb3eb5595214ed3b0c96afee36547a938349c"
     );
 }
@@ -225,6 +274,9 @@ fn test_solana_pubkey_independent_expected_value() {
 struct MnemonicToPubkeyCircuit {
     mnemonic: &'static str,
     path: Vec<u32>,
+    /// The affine public key the compression asserts, or `None` to output the leaf secret key
+    /// instead: the pass that finds it is the pass that lets the host compute the advice.
+    advice: Option<[CompositeWord<u64, 4>; 2]>,
 }
 
 impl Circuit for MnemonicToPubkeyCircuit {
@@ -245,8 +297,14 @@ impl Circuit for MnemonicToPubkeyCircuit {
         for &index in &self.path {
             (key, chain) = slip10_ed25519_child(allocator.clone(), &key, &chain, index);
         }
-        let pubkey = ed25519_public_key(frontend, &key);
-        pubkey.into_iter().for_each(|w| frontend.output(w));
+        match self.advice {
+            None => key.into_iter().for_each(|w| frontend.output(w)),
+            advice => Assertions::scope(frontend, |asserts| {
+                ed25519_public_key(frontend, &key, advice, asserts)
+                    .into_iter()
+                    .for_each(|w| frontend.output(w));
+            }),
+        }
     }
 }
 
@@ -256,13 +314,24 @@ fn test_solana_pubkey_wallet_core_vector() {
     // mnemonic at Solana's default derivation path m/44'/501'/0' gives the address
     // 2bUBiBNZyD29gP1oV6de7nxowMLoDBtopMMTGgMvjG5m, whose Base58 decoding is the public key
     // below. The whole pipeline — BIP-39 seed, SLIP-0010 chain, Ed25519 key — runs in-circuit.
-    let out = exec::<_, WP, _>(&MnemonicToPubkeyCircuit {
-        mnemonic: "shoot island position soft burden budget tooth cruel issue economy destroy above",
+    const MNEMONIC: &str =
+        "shoot island position soft burden budget tooth cruel issue economy destroy above";
+    let leaf = exec::<_, WP, _>(&MnemonicToPubkeyCircuit {
+        mnemonic: MNEMONIC,
         path: vec![44, 501, 0],
+        advice: None,
     }, ExecOptions::new())
     .u8;
+    let out = exec::<_, WP, _>(&MnemonicToPubkeyCircuit {
+        mnemonic: MNEMONIC,
+        path: vec![44, 501, 0],
+        advice: Some(affine_of(&leaf)),
+    }, ExecOptions::new())
+    .u8;
+    assert_eq!(out.len(), 33, "expected a 32-byte key and an assertion flag");
+    assert_eq!(out[32], 1, "the compression's assertions did not hold");
     assert_eq!(
-        to_hex(&out),
+        to_hex(&out[..32]),
         "17b02c16bf792e54b606db6c2b10a24647a3e96215f5450186e183f57caaf0d0"
     );
 }
@@ -272,6 +341,8 @@ fn test_solana_pubkey_wallet_core_vector() {
 struct MnemonicToSolanaCircuit {
     mnemonic: &'static str,
     account: u32,
+    /// The affine public key the compression asserts, or `None` to output the BIP-39 seed instead.
+    advice: Option<[CompositeWord<u64, 4>; 2]>,
 }
 
 impl Circuit for MnemonicToSolanaCircuit {
@@ -288,8 +359,14 @@ impl Circuit for MnemonicToSolanaCircuit {
             zkboo_bip32::SALT_PREFIX,
             zkboo_bip32::PBKDF2_ROUNDS,
         );
-        let pubkey = solana_pubkey(frontend, seed.to_vec(), self.account);
-        pubkey.into_iter().for_each(|w| frontend.output(w));
+        match self.advice {
+            None => seed.into_iter().for_each(|w| frontend.output(w)),
+            advice => Assertions::scope(frontend, |asserts| {
+                solana_pubkey(frontend, seed.to_vec(), self.account, advice, asserts)
+                    .into_iter()
+                    .for_each(|w| frontend.output(w));
+            }),
+        }
     }
 }
 
@@ -309,12 +386,26 @@ fn test_solana_pubkey_four_level_path_external_vector() {
             "e7f93aa341ce1445f8e82e500a6cb64a5515e519589d455c617c007d993f43b1",
         ),
     ];
+    const MNEMONIC: &str =
+        "neither lonely flavor argue grass remind eye tag avocado spot unusual intact";
     for (account, expected) in vectors {
-        let out = exec::<_, WP, _>(&MnemonicToSolanaCircuit {
-            mnemonic: "neither lonely flavor argue grass remind eye tag avocado spot unusual intact",
+        // One pass for the BIP-39 seed, so the host can compute what the compression asserts.
+        let seed = exec::<_, WP, _>(&MnemonicToSolanaCircuit {
+            mnemonic: MNEMONIC,
             account,
+            advice: None,
         }, ExecOptions::new())
         .u8;
-        assert_eq!(to_hex(&out), expected, "account {account}");
+        let mut tables = ComputedWindowTables::new(Point::base(), 5);
+        let advice = Some(solana_pubkey_affine(seed, account, &mut tables, ExecOptions::new()));
+        let out = exec::<_, WP, _>(&MnemonicToSolanaCircuit {
+            mnemonic: MNEMONIC,
+            account,
+            advice,
+        }, ExecOptions::new())
+        .u8;
+        assert_eq!(out.len(), 33, "expected a 32-byte key and an assertion flag");
+        assert_eq!(out[32], 1, "the compression's assertions did not hold");
+        assert_eq!(to_hex(&out[..32]), expected, "account {account}");
     }
 }
