@@ -15,10 +15,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   The tweak is derived inside the circuit, so the host can learn it only by mirroring that derivation; `taproot_tweak_scalar` does exactly that, in one cleartext pass over the caller's own table source and under the caller's execution options, so a caller servicing an operating system between backend operations keeps doing so throughout.
 - The derivations are unchanged gate for gate, and the known-answer vectors are untouched.
 
+- The Taproot output key and every Ed25519 derivation take the affine point their final conversion produces as advice, and assert it rather than computing a modular inverse.
+  `TaprootWitness::compute`, `ed25519_public_key_affine` and `solana_pubkey_affine` mirror the derivations on the host to produce it, each over the caller's table source and under the caller's execution options.
+  This recovers a regression that entered when the hint gate was removed: `Point::to_affine` had been hint-backed, and losing the hint added one in-circuit inversion to each of the two statements that convert to affine coordinates.
+  Taproot goes from 892,733 AND messages to 800,448 and Solana from 1,212,358 to 1,118,276, both a little below where they stood before the hint gate went.
+- Ed25519 derivations take an assertion accumulator, having something to assert for the first time.
+
 ### Removed
 
 - `PublicKeyAdvice`, `public_key_advice`, `public_key_advice_with_tables` and `public_key_advice_shape`.
-- `TaprootAdvice`, replaced by `taproot_tweak_scalar`, which returns a scalar rather than a table of slopes.
+- `TaprootAdvice`, replaced by `TaprootWitness`, which holds two public quantities — the tweak scalar and the output key — rather than a table of key-equivalent slopes.
 
 ## [1.2.0] — 2026-09-04
 

@@ -18,8 +18,8 @@ use zkboo::{
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::{
-    TAP_TWEAK_TAG_HASH, be_bytes_to_word, p2sh_p2wpkh_payload, pubkey_hash160, taproot_output_key,
-    taproot_tweak_scalar,
+    TAP_TWEAK_TAG_HASH, TaprootWitness, be_bytes_to_word, p2sh_p2wpkh_payload, pubkey_hash160,
+    taproot_output_key,
 };
 use zkboo_ecc::secp256k1::Secp256k1PM;
 use zkboo_ecc::weierstrass::{ComputedWindowTables, Curve, DEFAULT_COMB_WINDOW_BITS};
@@ -69,13 +69,13 @@ impl Circuit for BitcoinCircuit {
                     .into_iter()
                     .for_each(|w| frontend.output(w)),
                 Payload::Taproot => {
-                    // The tweak scalar is derived inside the circuit, so the host learns it only by
-                    // mirroring that derivation: one cleartext pass, through a backend, over the
-                    // caller's own table source.
+                    // The tweak scalar and the output key are both derived inside the circuit, so
+                    // the host learns them only by mirroring that derivation: cleartext passes,
+                    // through a backend, over the caller's own table source.
                     let mut tables =
                         ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
-                    let tweak = taproot_tweak_scalar(key, &mut tables, ExecOptions::new());
-                    taproot_output_key(frontend, scalar, Some(key), Some(tweak), asserts)
+                    let witness = TaprootWitness::compute(key, &mut tables, ExecOptions::new());
+                    taproot_output_key(frontend, scalar, Some(key), Some(witness), asserts)
                         .into_iter()
                         .for_each(|w| frontend.output(w))
                 }
