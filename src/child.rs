@@ -14,7 +14,7 @@ use zkboo_hmac::hmac;
 use zkboo_sha2::{SHA512_BLOCKSIZE, sha512bytes};
 
 use crate::{
-    pubkey::{PublicKeyAdvice, public_key_affine_with_tables},
+    pubkey::public_key_affine_with_tables,
     util::{be_bytes_to_word, word_to_be_bytes},
 };
 
@@ -95,8 +95,8 @@ pub fn normal_child_key<B: Backend>(
     frontend: &Frontend<B>,
     parent_chain_code: Vec<WordRef<B, u8>>,
     parent_private_key: Vec<WordRef<B, u8>>,
+    parent_private_key_value: Option<CompositeWord<u64, 4>>,
     index: u32,
-    advice: &PublicKeyAdvice,
     assertions: &mut Assertions<B>,
 ) -> (WordRef<B, u64, 4>, [WordRef<B, u8>; 32]) {
     let mut tables = ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
@@ -104,9 +104,9 @@ pub fn normal_child_key<B: Backend>(
         frontend,
         parent_chain_code,
         parent_private_key,
+        parent_private_key_value,
         index,
         &mut tables,
-        advice,
         assertions,
     );
 }
@@ -116,9 +116,9 @@ pub fn normal_child_key_with_tables<B: Backend>(
     frontend: &Frontend<B>,
     parent_chain_code: Vec<WordRef<B, u8>>,
     parent_private_key: Vec<WordRef<B, u8>>,
+    parent_private_key_value: Option<CompositeWord<u64, 4>>,
     index: u32,
     tables: &mut impl WindowTables<u64, 4, Secp256k1PM>,
-    advice: &PublicKeyAdvice,
     assertions: &mut Assertions<B>,
 ) -> (WordRef<B, u64, 4>, [WordRef<B, u8>; 32]) {
     assert!(
@@ -134,7 +134,13 @@ pub fn normal_child_key_with_tables<B: Backend>(
 
     // Parent public key Q = d·G, in SEC1 compressed form: (0x02 | y_parity) || x_be.
     let scalar = be_bytes_to_word(&parent_private_key);
-    let (x, y) = public_key_affine_with_tables(frontend, scalar, tables, advice, assertions);
+    let (x, y) = public_key_affine_with_tables(
+        frontend,
+        scalar,
+        parent_private_key_value,
+        tables,
+        assertions,
+    );
     let prefix = y.value().lsb().select_const_const(0x03u8, 0x02u8);
     let x_bytes = word_to_be_bytes(x.value());
 

@@ -18,14 +18,16 @@ use zkboo::{
     executor::{OwnedFlexibleWordPool, exec},
 };
 use zkboo_bip32::{
-    TAP_TWEAK_TAG_HASH, TaprootAdvice, be_bytes_to_word, p2sh_p2wpkh_payload, public_key_advice,
-    pubkey_hash160, taproot_output_key,
+    TAP_TWEAK_TAG_HASH, be_bytes_to_word, p2sh_p2wpkh_payload, pubkey_hash160, taproot_output_key,
+    taproot_tweak_scalar,
 };
+use zkboo_ecc::secp256k1::Secp256k1PM;
+use zkboo_ecc::weierstrass::{ComputedWindowTables, Curve, DEFAULT_COMB_WINDOW_BITS};
 use zkboo::executor::ExecOptions;
 
 /// The private key as a host word: 32 big-endian bytes, four `u64` limbs.
 ///
-/// The prover's view — advice is computed from the witness it already holds.
+/// The prover's view — the comb mirrors this on the host to find the slopes it needs.
 fn be_words(bytes: &[u8]) -> CompositeWord<u64, 4> {
     let mut limbs = [0u64; 4];
     for (i, chunk) in bytes.chunks(8).enumerate() {
@@ -57,26 +59,28 @@ impl Circuit for BitcoinCircuit {
             .map(|&b| frontend.input(b))
             .collect::<Vec<_>>();
         let scalar = be_bytes_to_word(&bytes);
-        let mut asserts = Assertions::new();
         let key = be_words(&self.private_key);
-        match self.payload {
-            Payload::PubkeyHash => {
-                pubkey_hash160(frontend, scalar, &public_key_advice(key), &mut asserts)
+        Assertions::scope(frontend, |asserts| {
+            match self.payload {
+                Payload::PubkeyHash => pubkey_hash160(frontend, scalar, Some(key), asserts)
                     .into_iter()
-                    .for_each(|w| frontend.output(w))
-            }
-            Payload::P2shP2wpkh => {
-                p2sh_p2wpkh_payload(frontend, scalar, &public_key_advice(key), &mut asserts)
+                    .for_each(|w| frontend.output(w)),
+                Payload::P2shP2wpkh => p2sh_p2wpkh_payload(frontend, scalar, Some(key), asserts)
                     .into_iter()
-                    .for_each(|w| frontend.output(w))
+                    .for_each(|w| frontend.output(w)),
+                Payload::Taproot => {
+                    // The tweak scalar is derived inside the circuit, so the host learns it only by
+                    // mirroring that derivation: one cleartext pass, through a backend, over the
+                    // caller's own table source.
+                    let mut tables =
+                        ComputedWindowTables::new(Secp256k1PM.g(), DEFAULT_COMB_WINDOW_BITS);
+                    let tweak = taproot_tweak_scalar(key, &mut tables, ExecOptions::new());
+                    taproot_output_key(frontend, scalar, Some(key), Some(tweak), asserts)
+                        .into_iter()
+                        .for_each(|w| frontend.output(w))
+                }
             }
-            Payload::Taproot => {
-                taproot_output_key(frontend, scalar, &TaprootAdvice::compute(key), &mut asserts)
-                    .into_iter()
-                    .for_each(|w| frontend.output(w))
-            }
-        }
-        asserts.output(frontend);
+        });
     }
 }
 
